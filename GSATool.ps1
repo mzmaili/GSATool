@@ -1058,6 +1058,7 @@ if($TestNumber -eq '1'){
     PrivateDNS
 }else{
     Write-Log -Message "`nQuit option has been chosen`n"
+    exit
 }
 
-Write-Log -Message "`nAll tests passed successfully. If you still have an issue, feel free to open a support request`n" -ForegroundColor Green
+Write-Log -Message "`nAll tests passed successfully. If you have an issue not addressed, please open a support request`n" -ForegroundColor Green

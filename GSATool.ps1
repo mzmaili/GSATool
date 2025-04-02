@@ -809,7 +809,6 @@ Function testPrivateAccessApp{
         return $false
     }
 
-    # Display the results in a grid view and allow user to select a value
     $forwardingProfiles = $GraphResult.value
     Write-Log -Message "Checking Private Access Application configuration..." -ForegroundColor Yellow
     
@@ -822,7 +821,7 @@ Function testPrivateAccessApp{
     $testQAAppResult = $false
     $testPAAppResult = testPAApplication -PAappID $PAappID -PappDisplayName $PappDisplayName -PAAppObjID $PAAppObjID -portNumber $PAPort -PAProtocol $PAProtocol
     if (!$testPAAppResult){
-        Write-Log -Message "`nTest Failed: selected port and/or protocol is not configured in the selected Private Access application: $($PappDisplayName).`n" -ForegroundColor Red
+        Write-Log -Message "`nTest Failed: selected port and/or protocol is not configured in the selected Private Access application: $($PappDisplayName). Also, not configured in Quick Access Application`n" -ForegroundColor Red
         Write-Log -Message "Recommended action: Please ensure the port and protocol are both configured in any Private Access application`n`n" -ForegroundColor Yellow
         return $false
         
@@ -833,18 +832,18 @@ Function testPrivateAccessApp{
 
         if(!$tunnelStatus.TcpTestSucceeded){
             Write-Log -Message "`nTest failed: Connection has not established to GSA edge`n" -ForegroundColor Red
-            Write-Log -Message "Recommended action: Please ensure outbound traffic is allowed for port number $($Port) and protocol $($Protocol). Also, ensure that NRPT is configured correctly `n`n" -ForegroundColor Yellow
+            Write-Log -Message "Recommended action: Please ensure outbound traffic is allowed for port number $($Port) and protocol $($Protocol) `n`n" -ForegroundColor Yellow
             return $false
         }
-
-        if (!($tunnelStatus.RemoteAddress.IPAddressToString -like "6.6.*")){
+        $isFQDNorIP = Test-IPorFQDN -FQDNorIP $FQDNorIP
+        if (($isFQDNorIP -eq "FQDN") -and (!($tunnelStatus.RemoteAddress.IPAddressToString -like "6.6.*"))){
             Write-Log -Message "`nTest failed: Connection has not tunneled`n" -ForegroundColor Red
             Write-Log -Message "Recommended action: Please ensure outbound traffic is allowed for port number $($Port) and protocol $($Protocol) `n`n" -ForegroundColor Yellow
             return $false
         }
 
         Write-Log -Message "Test passed: Tunnel has established successfully to GSA Edge with the following details:" -ForegroundColor Green
-        $isFQDNorIP = Test-IPorFQDN -FQDNorIP $FQDNorIP
+        #$isFQDNorIP = Test-IPorFQDN -FQDNorIP $FQDNorIP
         if ($isFQDNorIP -eq "FQDN"){
             Write-Log -Message " FQDN: $($FQDNorIP)" -ForegroundColor Green
             Write-Log -Message " Synthetic Address: $($tunnelStatus.RemoteAddress)" -ForegroundColor Green
@@ -858,6 +857,9 @@ Function testPrivateAccessApp{
                 Write-Log -Message "Recommended action: Ensure you have entered a valid dns record, configured Private DNS, and connector server is able to resolve DNS names`n`n" -ForegroundColor Yellow
                 retuen $false
             }
+        }elseif ($isFQDNorIP -eq "ip"){
+            Write-Log -Message " IP Address: $($FQDNorIP)" -ForegroundColor Green
+            Write-Log -Message " Port Number: $($Port)" -ForegroundColor Green
         }
         
         #Write-Log -Message " Synthetic Address: $($tunnelStatus.RemoteAddress)" -ForegroundColor Green
@@ -919,17 +921,20 @@ Function testPrivateAccessRules{
         }
 
         If (!$IPExists){
-            Write-Log -Message "IP Address does not exist, make sure its configured in an PA app"
+            Write-Log -Message "IP Address is not configured for a Private Access application"
+            Write-Log -Message "Recommended action: Ensure you enter a valid IP Address and its configured in an Private Access application`n`n" -ForegroundColor Yellow
             return $false
         }
 
         If (!$PortExists){
-            Write-Log -Message "Port $Port is NOT configured for the Private Access application (App ID: $($appID))" -ForegroundColor Red
+            Write-Log -Message "Port $Port is NOT configured for the Private Access application (App ID: $($appID))`n" -ForegroundColor Red
+            Write-Log -Message "Recommended action: Ensure you enter a correct port number and its configured in the Private Access Application (App ID: $($appID))`n`n" -ForegroundColor Yellow
             return $false
         }
 
         If (!$ProtocolExists){
             Write-Log -Message "$($Protocol) protocol is NOT configured for port number $($Port) for the Private Access application: (App ID: $($appID)" -ForegroundColor red
+            Write-Log -Message "Recommended action: Ensure you enter a correct protocol and its configured in the Private Access Application (App ID: $($appID))`n`n" -ForegroundColor Yellow
             return $false
         }
     
@@ -959,8 +964,8 @@ Function testPrivateAccessRules{
         }
 
         If (!$FQDNExists){
-            Write-Log -Message "The entered FQDN does not exist`n" -ForegroundColor Red
-            Write-Log -Message "Recommended action: Ensure you enter a valid FQDN and its configured in an Private Access app`n`n" -ForegroundColor Yellow
+            Write-Log -Message "Entered FQDN is not configured for a Private Access application`n" -ForegroundColor Red
+            Write-Log -Message "Recommended action: Ensure you enter a valid FQDN and its configured in an Private Access application`n`n" -ForegroundColor Yellow
             return $false
         }
 

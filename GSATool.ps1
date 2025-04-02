@@ -412,20 +412,20 @@ Function testPrivateAccessConfig(){
         return $false
     }
     
-    Write-Log -Message "Testing Private forwarding profile..." -ForegroundColor Yellow
+    Write-Log -Message "Testing Private Access forwarding profile..." -ForegroundColor Yellow
     $PrivateProfile = $GraphResult.value | Where-Object -Property trafficForwardingType -eq 'private'
     if($PrivateProfile.state -ge 'enabled'){
         #Profile is enabled
-        Write-Log -Message "Test passed: Private forwarding profile is enabled`n" -ForegroundColor Green
+        Write-Log -Message "Test passed: Private Access forwarding profile is enabled`n" -ForegroundColor Green
     }else{
         #Profile is disabled
-        Write-Log -Message "Test failed: Private forwarding profile is NOT enabled`n" -ForegroundColor Red
+        Write-Log -Message "Test failed: Private Access forwarding profile is NOT enabled`n" -ForegroundColor Red
         Write-Log -Message "`nRecommended action: Please enable Private access profile from Entra > Global Secure Access > Connect > Traffic forwarding`n`n" -ForegroundColor Yellow
         return $false
     }
     
     #Fetshing Private profile SP
-    Write-Log -Message "Checking user  to Private forwarding profile..." -ForegroundColor Yellow
+    Write-Log -Message "Checking user assignments to Private Access forwarding profile..." -ForegroundColor Yellow
     $PrivateSPId = $PrivateProfile.servicePrincipal.id
     try{
         $GraphLink = "https://graph.microsoft.com/v1.0/servicePrincipals/$($PrivateSPId)?`$select=id,appid,accountEnabled,appRoleAssignmentRequired&`$expand=appRoleAssignedTo(`$select=principalId,principalType,principalDisplayName)"
@@ -646,7 +646,7 @@ Function testGSAClient{
         Write-Log -Message "Forwarding profile key exists" -ForegroundColor Green
     }else{
         Write-Log -Message "Test Failed: Forwarding profile key does not exists" -ForegroundColor Red
-        Write-Log -Message "`nRecommended action: Please ensure Private forwarding profile is enabled and user is assigned in Entra portal under Global Secure Access > Connect > Traffic forwarding`n`n" -ForegroundColor Yellow
+        Write-Log -Message "`nRecommended action: Please ensure Private Access forwarding profile is enabled and user is assigned in Entra portal under Global Secure Access > Connect > Traffic forwarding`n`n" -ForegroundColor Yellow
         return $false
     }
      if ((Get-ItemPropertyValue -Path $path -Name $name) -ne "") {
@@ -660,11 +660,11 @@ Function testGSAClient{
     $jsonObject = $regForwardingPRofile.ForwardingProfile | ConvertFrom-Json
     $hasPrivateChannel = $jsonObject.policy.channels | Where-Object { $_.name -eq "Private" }
     if (!$hasPrivateChannel){
-        Write-Log -Message "Test Failed: forwarding profile is not retreived" -ForegroundColor Red
-        Write-Log -Message "`nRecommended action: Please ensure Private forwarding profile is enabled and user is assigned in Entra portal under Global Secure Access > Connect > Traffic forwarding`n`n" -ForegroundColor Yellow
+        Write-Log -Message "Test Failed: forwarding profile is not retrieved" -ForegroundColor Red
+        Write-Log -Message "`nRecommended action: Please ensure Private Access forwarding profile is enabled and user is assigned in Entra portal under Global Secure Access > Connect > Traffic forwarding`n`n" -ForegroundColor Yellow
         return $false
     }
-    Write-Log -Message "Test passed: Private forwarding profile configuration has retreived`n" -ForegroundColor Green
+    Write-Log -Message "Test passed: Private Access forwarding profile configuration has retrieved`n" -ForegroundColor Green
 
     #Testing connectivity to primary, secondary, diagnostic URLs
     $primaryEdges = $jsonObject.policy.channels[0].edgesSettings.primaryEdges[0].edgeAddress
@@ -673,12 +673,12 @@ Function testGSAClient{
 
     Write-Log -Message "Testing connectivity to Private Access Edge..." -ForegroundColor Yellow
     if (!(Test-NetConnection -ComputerName $primaryEdges -Port 443 -InformationAction SilentlyContinue).TcpTestSucceeded){
-        Write-Log -Message "Test Failed: forwarding profile is not retreived`n" -ForegroundColor Red
-        Write-Log -Message "`nRecommended action: Please ensure Private forwarding profile is enabled and user is assigned in Entra portal under Global Secure Access > Connect > Traffic forwarding`n`n" -ForegroundColor Yellow
+        Write-Log -Message "Test Failed: forwarding profile is not retrieved`n" -ForegroundColor Red
+        Write-Log -Message "`nRecommended action: Please ensure Private Access forwarding profile is enabled and user is assigned in Entra portal under Global Secure Access > Connect > Traffic forwarding`n`n" -ForegroundColor Yellow
 
         Write-Log -Message "Testing connectivity to the secondary Private Access Edge..." -ForegroundColor Yellow
         if (!(Test-NetConnection -ComputerName $secondaryEdges -Port 443 -InformationAction SilentlyContinue).TcpTestSucceeded){
-            Write-Log -Message "Test Failed: forwarding profile is not retreived" -ForegroundColor Red
+            Write-Log -Message "Test Failed: forwarding profile is not retrieved" -ForegroundColor Red
             Write-Log -Message "`nRecommended action: Please ensure there is Internet connectivity to the following Private Access Edges is enabled:`n$($primaryEdges)`n$($secondaryEdges)`n`n" -ForegroundColor Yellow
             return $false
         }else{
@@ -1017,7 +1017,7 @@ Clear-Host
 Write-Log -Message "=======================================================" -ForegroundColor Green 
 Write-Log -Message "`tGlobal Secure Access Troubleshooting Tool"  -ForegroundColor Green 
 Write-Log -Message "=======================================================`n" -ForegroundColor Green 
-Write-Log -Message "Please provide any feedback, comment or suggestion`n" -ForegroundColor Yellow
+Write-Log -Message "Please submit your feedback at aka.ms/GSAToolFeedback`n" -ForegroundColor Yellow
 Write-Log -Message "Enter (1) to troubleshoot Entra Microsoft 365`n" -ForegroundColor Green
 Write-Log -Message "Enter (2) to troubleshoot Entra Private Access`n" -ForegroundColor Green
 Write-Log -Message "Enter (3) to troubleshoot Entra Internet Access`n" -ForegroundColor Green

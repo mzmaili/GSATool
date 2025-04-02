@@ -833,7 +833,7 @@ Function testPrivateAccessApp{
 
         if(!$tunnelStatus.TcpTestSucceeded){
             Write-Log -Message "`nTest failed: Connection has not established to GSA edge`n" -ForegroundColor Red
-            Write-Log -Message "Recommended action: Please ensure outbound traffic is allowed for port number $($Port) and protocol $($Protocol) `n`n" -ForegroundColor Yellow
+            Write-Log -Message "Recommended action: Please ensure outbound traffic is allowed for port number $($Port) and protocol $($Protocol). Also, ensure that NRPT is configured correctly `n`n" -ForegroundColor Yellow
             return $false
         }
 

@@ -822,7 +822,7 @@ Function testPrivateAccessApp{
     $testQAAppResult = $false
     $testPAAppResult = testPAApplication -PAappID $PAappID -PappDisplayName $PappDisplayName -PAAppObjID $PAAppObjID -portNumber $PAPort -PAProtocol $PAProtocol
     if (!$testPAAppResult){
-        Write-Log -Message "`nTest Failed: selected port and/or protocol is not configured in the selected Private Access application: $($PappDisplayName). Also, not configured in Quick Access Application`n" -ForegroundColor Red
+        Write-Log -Message "`nTest Failed: selected port and/or protocol is not configured in the selected Private Access application: $($PappDisplayName).`n" -ForegroundColor Red
         Write-Log -Message "Recommended action: Please ensure the port and protocol are both configured in any Private Access application`n`n" -ForegroundColor Yellow
         return $false
         
@@ -959,7 +959,7 @@ Function testPrivateAccessRules{
         }
 
         If (!$FQDNExists){
-            Write-Log -Message "Entered FQDN does not exist`n" -ForegroundColor Red
+            Write-Log -Message "The entered FQDN does not exist`n" -ForegroundColor Red
             Write-Log -Message "Recommended action: Ensure you enter a valid FQDN and its configured in an Private Access app`n`n" -ForegroundColor Yellow
             return $false
         }

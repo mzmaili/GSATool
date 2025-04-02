@@ -5,7 +5,6 @@
 .DESCRIPTION
     Global Secure Access Troubleshooter Tool is a PowerShell script that troubleshoots Global Secure Access common issues.
 
-
 .Example
     .\GSATool.ps1 -TestNumber <testNumber> -FQDNorIP <FQDN> -PortNumber <portNumber> -Protocol <protocol> -UserUPN <testUserUPN>
 
@@ -935,7 +934,7 @@ Function testPrivateAccessRules{
         }
     
     }elseif ($input -eq "FQDN"){
-        $rulesWithFQDN = $json.policy.rules | Where-Object { $_.matchingCriteria.address.fqdns.Length -ge 1 }
+        $rulesWithFQDN = $json.policy.rules | Where-Object { $_.matchingCriteria.address.fqdns.Length -ge 1 -and $_.appAuthorizationTokenContext.clientAppId.Length -ge 1}
         $FQDNExists = $false
         $PortExists = $false
         $ProtocolExists = $false
@@ -960,17 +959,20 @@ Function testPrivateAccessRules{
         }
 
         If (!$FQDNExists){
-            Write-Log -Message "Entered FQDN does not exist, make sure its configured in an PA app" -ForegroundColor Red
+            Write-Log -Message "Entered FQDN does not exist`n" -ForegroundColor Red
+            Write-Log -Message "Recommended action: Ensure you enter a valid FQDN and its configured in an Private Access app`n`n" -ForegroundColor Yellow
             return $false
         }
 
         If (!$PortExists){
-            Write-Log -Message "Port $Port is NOT configured for the Private Access application (App ID: $($appID))" -ForegroundColor Red
+            Write-Log -Message "Port $Port is NOT configured for the Private Access application (App ID: $($appID))`n" -ForegroundColor Red
+            Write-Log -Message "Recommended action: Ensure you enter a correct port number and its configured in the Private Access Application (App ID: $($appID))`n`n" -ForegroundColor Yellow
             return $false
         }
 
         If (!$ProtocolExists){
-            Write-Log -Message "$($Protocol) protocol is NOT configured for port number $($Port) for the Private Access application: (App ID: $($appID)" -ForegroundColor red
+            Write-Log -Message "$($Protocol) protocol is NOT configured for port number $($Port) for the Private Access application: (App ID: $($appID)`n" -ForegroundColor red
+            Write-Log -Message "Recommended action: Ensure you enter a correct protocol and its configured in the Private Access Application (App ID: $($appID))`n`n" -ForegroundColor Yellow
             return $false
         }
 

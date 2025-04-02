@@ -392,7 +392,7 @@ Function testPrivateAccessConfig(){
         Write-Log -Message "`nOperation aborted. Unable to connect to Microsoft Entra ID, please check you entered a correct credentials and you have the needed permissions`n`n" -ForegroundColor red
         return $false
     }
-    Write-Log -Message "Testing Global Secure Access activation status..." -ForegroundColor Yellow
+    Write-Log -Message "Checking Global Secure Access activation status..." -ForegroundColor Yellow
     if($GraphResult.onboardingStatus -eq 'onboarded'){
             #Tenant onboarded
             Write-Log -Message "Test passed: Global Secure Access is activated in the tenant`n" -ForegroundColor Green
@@ -412,7 +412,7 @@ Function testPrivateAccessConfig(){
         return $false
     }
     
-    Write-Log -Message "Testing Private Access forwarding profile..." -ForegroundColor Yellow
+    Write-Log -Message "Checking Private Access forwarding profile..." -ForegroundColor Yellow
     $PrivateProfile = $GraphResult.value | Where-Object -Property trafficForwardingType -eq 'private'
     if($PrivateProfile.state -ge 'enabled'){
         #Profile is enabled
@@ -637,7 +637,7 @@ Function testPAApplication{
 
 Function testGSAClient{
     #Testing Forwarding Profile
-    Write-Log -Message "Testing Private Access profile..." -ForegroundColor Yellow
+    Write-Log -Message "Checking Private Access profile..." -ForegroundColor Yellow
     
     $path = "HKLM:\SOFTWARE\Microsoft\Global Secure Access Client"
     $name = "ForwardingProfile"
@@ -671,12 +671,12 @@ Function testGSAClient{
     $secondaryEdges = $jsonObject.policy.channels[0].edgesSettings.secondaryEdges[0].edgeAddress
     $diagnosticUri = $jsonObject.policy.channels[0].diagnosticUri
 
-    Write-Log -Message "Testing connectivity to Private Access Edge..." -ForegroundColor Yellow
+    Write-Log -Message "Checking connectivity to Private Access Edge..." -ForegroundColor Yellow
     if (!(Test-NetConnection -ComputerName $primaryEdges -Port 443 -InformationAction SilentlyContinue).TcpTestSucceeded){
         Write-Log -Message "Test Failed: forwarding profile is not retrieved`n" -ForegroundColor Red
         Write-Log -Message "`nRecommended action: Please ensure Private Access forwarding profile is enabled and user is assigned in Entra portal under Global Secure Access > Connect > Traffic forwarding`n`n" -ForegroundColor Yellow
 
-        Write-Log -Message "Testing connectivity to the secondary Private Access Edge..." -ForegroundColor Yellow
+        Write-Log -Message "Checking connectivity to the secondary Private Access Edge..." -ForegroundColor Yellow
         if (!(Test-NetConnection -ComputerName $secondaryEdges -Port 443 -InformationAction SilentlyContinue).TcpTestSucceeded){
             Write-Log -Message "Test Failed: forwarding profile is not retrieved" -ForegroundColor Red
             Write-Log -Message "`nRecommended action: Please ensure there is Internet connectivity to the following Private Access Edges is enabled:`n$($primaryEdges)`n$($secondaryEdges)`n`n" -ForegroundColor Yellow
@@ -690,7 +690,7 @@ Function testGSAClient{
     }
 
     #Testing connectivity to connectivity URLs
-    Write-Log -Message "Testing connectivity to Private Access health..." -ForegroundColor Yellow
+    Write-Log -Message "Checking connectivity to Private Access health..." -ForegroundColor Yellow
     $healthTest = Invoke-WebRequest -Uri "https://private.edgediagnostic.globalsecureaccess.microsoft.com/connectivitytest/ping"
     if (!($healthTest.StatusCode -eq 200 -and $healthTest.Content -eq 'pong')){
         Write-Log -Message "Test Failed: connectivity to Private Access is not healthy" -ForegroundColor Red
@@ -814,7 +814,7 @@ Function testPrivateAccessApp{
 
     # Display the results in a grid view and allow user to select a value
     $forwardingProfiles = $GraphResult.value
-    Write-Log -Message "Testing Private Access Application configuration..." -ForegroundColor Yellow
+    Write-Log -Message "Checking Private Access Application configuration..." -ForegroundColor Yellow
     
     $PAPort = $Port
     $PAProtocol = $Protocol
@@ -831,7 +831,7 @@ Function testPrivateAccessApp{
         
     }else{
         # test tunnelling
-        Write-Log -Message "`nTesting tunnel establishing..." -ForegroundColor Yellow
+        Write-Log -Message "`nChecking tunnel establishing..." -ForegroundColor Yellow
         $tunnelStatus = Test-NetConnection -ComputerName $FQDNorIP -Port $Port -InformationAction SilentlyContinue
 
         if(!$tunnelStatus.TcpTestSucceeded){
@@ -878,7 +878,7 @@ Function testPrivateAccessRules{
         $Protocol
     ) 
 
-    Write-Log -Message "Testing GSA client forwarding profile configuration..." -ForegroundColor Yellow
+    Write-Log -Message "Checking GSA client forwarding profile configuration..." -ForegroundColor Yellow
     if (!$FQDNorIP) { $FQDNorIP = Read-Host "Enter valid FQDN or IP address for the terget resource" }
     if (!$Port) { $Port = Read-Host "Enter valid port number" }
     if (!$Protocol) { $Protocol = Read-Host "Enter valid protocol (TCP/UDP)" }

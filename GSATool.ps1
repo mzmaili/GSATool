@@ -976,6 +976,7 @@ Function testPrivateAccessApp{
                 #dns does not resolve
                 Write-Log -Message "`nTest failed: could not resolve DNS name for $($FQDNorIP)`n" -ForegroundColor Red
                 Write-Log -Message "Recommended action: Ensure you have entered a valid dns record, configured Private DNS, and connector server is able to resolve DNS names`n`n" -ForegroundColor Yellow
+                exit
                 retuen $false
             }
         }elseif ($isFQDNorIP -eq "ip"){

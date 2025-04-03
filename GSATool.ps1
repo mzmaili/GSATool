@@ -397,6 +397,7 @@ Function testPrivateAccessConfig(){
             #Tenant isn't onboarded
             Write-Log -Message "Test failed: Global Secure Access is NOT activated on the tenant`n" -ForegroundColor Red
             Write-Log -Message "`nRecommended action: Activate Global Secure Access in your tennat by navigating to Global Secure Access > Get started > Activate Global Secure Access in your tenant, select Activate`n`n" -ForegroundColor Yellow
+            exit
             return $false
         }
 
@@ -451,6 +452,9 @@ Function testPrivateAccessConfig(){
         try{
             $GraphLink = "https://graph.microsoft.com/v1.0/users/$($global:UserUPN)"
             $GraphResult = Invoke-GraphRequest -Uri $GraphLink
+            if (!$GraphResult) {
+                throw "404 Not Found"
+            }
         }catch{
             Write-Log -Message "`nOperation aborted. Make sure to enter a valid UPN and you have the needed permissions`n`n" -ForegroundColor red
             return $false
@@ -514,8 +518,9 @@ Function testPAApplication{
         [string]$PAappID,
         [string]$PappDisplayName,
         [string]$PAAppObjID,
-        [string]$portNumber,
-        [string]$PAProtocol
+        [int]$portNumber,
+        [string]$PAProtocol,
+        [string]$FQDNorIP
     )
 
     Write-Log -Message "Checking Private Access Application user configuration..." -ForegroundColor Yellow
@@ -588,38 +593,154 @@ Function testPAApplication{
         Write-Log -Message "`nOperation aborted. Unable to connect to Microsoft Entra ID, please check you entered a correct credentials and you have the needed permissions`n`n" -ForegroundColor red
         return $false
     }
-    $items = $GraphResult.value
-    $Protocol = ""
-    $portNumber = $PAPort
-    if ($portNumber -match "^\d+$") {
-        $portNumber = [int]$portNumber
-        $portFound = $false
-        foreach ($item in $items) {
-            foreach ($range in $item.ports) {
-                $bounds = $range -split "-"
-                if ($bounds.Count -eq 2) {
-                    $lower = [int]$bounds[0]
-                    $upper = [int]$bounds[1]
-                    if ($portNumber -ge $lower -and $portNumber -le $upper) {
-                        $portFound = $true
-                        $Protocol = $item.protocol
-                        break
+    $applicationSegments = ""
+    $item = ""
+    $portFound = $false
+    $ProtocolFound = $false
+    $input = Test-IPorFQDN -FQDNorIP $FQDNorIP
+    if ($input -eq "FQDN"){
+        $nameFound = $false
+        $applicationSegments = $GraphResult.value | Where-Object { $_.destinationType -eq "fqdn" }
+        foreach ($appSegment in $applicationSegments){
+            $nameFound = $false
+            if (($DestinationHost -eq $InputHost) -or ($DestinationHost -match "^\*\.(.+)$")) {
+                $nameFound = $true
+                if ($portNumber -match "^\d+$") {
+                    foreach ($range in $appSegment.ports) {
+                        $bounds = $range -split "-"
+                        if ($bounds.Count -eq 2) {
+                            $lower = [int]$bounds[0]
+                            $upper = [int]$bounds[1]
+                            if ($portNumber -ge $lower -and $portNumber -le $upper) {
+                                $portFound = $true
+                                # Checking the protocol
+                                if ($appSegment.protocol -cmatch "\b$($PAProtocol)\b"){
+                                    $ProtocolFound = $true
+                                    break
+                                }
+                            }
+                        }
                     }
                 }
             }
-            if ($portFound) { break }
+            if ($ProtocolFound){break}
         }
-    
+
         if ($portFound){
             Write-Log -Message "Port $portNumber is configured for Private Access application: $($PappDisplayName)" -ForegroundColor Green
             # Checking the protocol
-            if ($Protocol -cmatch "\b$($PAProtocol)\b"){
+            if ($ProtocolFound){
                 Write-Log -Message "$($PAProtocol) protocol is configured for port number $($portNumber)" -ForegroundColor Green
             }else{
                 Write-Log -Message "$($PAProtocol) protocol is NOT configured for port number $($portNumber)" -ForegroundColor red
                 return $false
             }
+        }else{
+            Write-Log -Message "Port $portNumber is NOT configured for Private Access application: $($PappDisplayName)" -ForegroundColor Red
+            return $false
+        }
 
+    }elseif ($input -eq "ip"){
+        $applicationSegments = $GraphResult.value | Where-Object { $_.destinationType -match "ip" }
+        foreach ($appSegment in $applicationSegments){
+            $portFound = $false
+            $ProtocolFound = $false
+            switch ($appSegment.destinationType){
+                "ipRangeCidr"{
+                    $CIDR = $appSegment.destinationHost -split "/"
+                    $BaseIP = [System.Net.IPAddress]::Parse($CIDR[0]).GetAddressBytes()
+                    [array]::Reverse($BaseIP)
+                    $BaseIP = [BitConverter]::ToUInt32($BaseIP, 0)
+                    $Mask = -bnot ([math]::Pow(2, (32 - [int]$CIDR[1])) - 1)
+                    $StartIP = $BaseIP -band $Mask
+                    $EndIP = $StartIP -bor (-bnot $Mask)
+                    $CheckIP = [System.Net.IPAddress]::Parse($FQDNorIP).GetAddressBytes()
+                    [array]::Reverse($CheckIP)
+                    $CheckIP = [BitConverter]::ToUInt32($CheckIP, 0)
+                    if ($CheckIP -ge $StartIP -and $CheckIP -le $EndIP) {
+                        if ($portNumber -match "^\d+$") {
+                            foreach ($range in $appSegment.ports) {
+                                $bounds = $range -split "-"
+                                if ($bounds.Count -eq 2) {
+                                    $lower = [int]$bounds[0]
+                                    $upper = [int]$bounds[1]
+                                    if ($portNumber -ge $lower -and $portNumber -le $upper) {
+                                        $portFound = $true
+                                        # Checking the protocol
+                                        if ($appSegment.protocol -cmatch "\b$($PAProtocol)\b"){
+                                            $ProtocolFound = $true
+                                            break
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                "ipRange" {
+                    $Range = $appSegment.destinationHost -split "\.\."
+                    $StartIP = [System.Net.IPAddress]::Parse($Range[0]).GetAddressBytes()
+                    $EndIP = [System.Net.IPAddress]::Parse($Range[1]).GetAddressBytes()
+                    $CheckIP = [System.Net.IPAddress]::Parse($FQDNorIP).GetAddressBytes()
+                    if ([BitConverter]::ToUInt32($CheckIP, 0) -ge [BitConverter]::ToUInt32($StartIP, 0) -and [BitConverter]::ToUInt32($CheckIP, 0) -le [BitConverter]::ToUInt32($EndIP, 0)) {
+                        #$portNumber = $PAPort
+                        if ($portNumber -match "^\d+$") {
+                            $portNumber = [int]$portNumber
+                            foreach ($range in $appSegment.ports) {
+                                $bounds = $range -split "-"
+                                if ($bounds.Count -eq 2) {
+                                    $lower = [int]$bounds[0]
+                                    $upper = [int]$bounds[1]
+                                    if ($portNumber -ge $lower -and $portNumber -le $upper) {
+                                        $portFound = $true
+                                        # Checking the protocol
+                                        if ($appSegment.protocol -cmatch "\b$($PAProtocol)\b"){
+                                            $ProtocolFound = $true
+                                            break
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                    }
+                }
+                "ip" {
+                    if ($FQDNorIP -eq $appSegment.destinationHost) {
+                        #$portNumber = $PAPort
+                        if ($portNumber -match "^\d+$") {
+                            $portNumber = [int]$portNumber
+                            foreach ($range in $appSegment.ports) {
+                                $bounds = $range -split "-"
+                                if ($bounds.Count -eq 2) {
+                                    $lower = [int]$bounds[0]
+                                    $upper = [int]$bounds[1]
+                                    if ($portNumber -ge $lower -and $portNumber -le $upper) {
+                                        $portFound = $true
+                                        # Checking the protocol
+                                        if ($appSegment.protocol -cmatch "\b$($PAProtocol)\b"){
+                                            $ProtocolFound = $true
+                                            break
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }if ($portFound -and $ProtocolFound) { break}
+        }
+
+
+        if ($portFound){
+            Write-Log -Message "Port $portNumber is configured for Private Access application: $($PappDisplayName)" -ForegroundColor Green
+            # Checking the protocol
+            if ($ProtocolFound){
+                Write-Log -Message "$($PAProtocol) protocol is configured for port number $($portNumber)" -ForegroundColor Green
+            }else{
+                Write-Log -Message "$($PAProtocol) protocol is NOT configured for port number $($portNumber)" -ForegroundColor red
+                return $false
+            }
         }else{
             Write-Log -Message "Port $portNumber is NOT configured for Private Access application: $($PappDisplayName)" -ForegroundColor Red
             return $false
@@ -819,10 +940,10 @@ Function testPrivateAccessApp{
     $PappDisplayName = $forwardingProfiles.displayName
     
     $testQAAppResult = $false
-    $testPAAppResult = testPAApplication -PAappID $PAappID -PappDisplayName $PappDisplayName -PAAppObjID $PAAppObjID -portNumber $PAPort -PAProtocol $PAProtocol
+    $testPAAppResult = testPAApplication -PAappID $PAappID -PappDisplayName $PappDisplayName -PAAppObjID $PAAppObjID -portNumber $PAPort -PAProtocol $PAProtocol -FQDNorIP $FQDNorIP
     if (!$testPAAppResult){
         Write-Log -Message "`nTest Failed: selected port and/or protocol is not configured in the selected Private Access application: $($PappDisplayName). Also, not configured in Quick Access Application`n" -ForegroundColor Red
-        Write-Log -Message "Recommended action: Please ensure the port and protocol are both configured in any Private Access application`n`n" -ForegroundColor Yellow
+        Write-Log -Message "Recommended action: Please ensure both port and protocol are configured in a Private Access application`n`n" -ForegroundColor Yellow
         return $false
         
     }else{
@@ -860,6 +981,7 @@ Function testPrivateAccessApp{
         }elseif ($isFQDNorIP -eq "ip"){
             Write-Log -Message " IP Address: $($FQDNorIP)" -ForegroundColor Green
             Write-Log -Message " Port Number: $($Port)" -ForegroundColor Green
+            Write-Log -Message " Protocol: $($Protocol)" -ForegroundColor Green
         }
         
         #Write-Log -Message " Synthetic Address: $($tunnelStatus.RemoteAddress)" -ForegroundColor Green
@@ -921,7 +1043,7 @@ Function testPrivateAccessRules{
         }
 
         If (!$IPExists){
-            Write-Log -Message "IP Address is not configured for a Private Access application"
+            Write-Log -Message "IP Address is not configured for a Private Access application`n" -ForegroundColor Red
             Write-Log -Message "Recommended action: Ensure you enter a valid IP Address and its configured in an Private Access application`n`n" -ForegroundColor Yellow
             return $false
         }
@@ -955,7 +1077,7 @@ Function testPrivateAccessRules{
                         $PortExists = $true
                         if ($rule.matchingCriteria.protocol -eq $Protocol){
                             $ProtocolExists = $true
-                            Write-Log -Message "The forwarding profile is configured to allow traffic with the following settings:`n`tRule ID: $($rule.id)`n`tApp ID:$($appID)`n`tFQDN: $($FQDNorIP)`n`tPort Number: $Port`n`tProtocol: $($Protocol)`n" -ForegroundColor Green
+                            Write-Log -Message "The forwarding profile is configured to allow traffic with the following settings:`n`tRule ID: $($rule.id)`n`tApp ID: $($appID)`n`tFQDN: $($FQDNorIP)`n`tPort Number: $Port`n`tProtocol: $($Protocol)`n" -ForegroundColor Green
                             break
                         }
                     }

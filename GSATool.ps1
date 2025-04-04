@@ -1084,6 +1084,7 @@ Function testPrivateAccessRules{
                     }
                 }
             }
+            if ($ProtocolExists){break}
         }
 
         If (!$FQDNExists){

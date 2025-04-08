@@ -345,6 +345,7 @@ Function ConnectToEntraID{
             $User_DisplayName=$claims.name
             $User_UPN=$claims.upn
             Write-Log -Message "There is a valid Access Token for user: $User_DisplayName, UPN: $User_UPN`n" -ForegroundColor Green
+            $global:onboardingStatus = $GraphResult.onboardingStatus
         }else{
             Write-Log -Message "There no valid Access Token, please sign-in to get an Access Token" -ForegroundColor Yellow
             $global:accesstoken = Connect-AzureDevicelogin
@@ -380,17 +381,20 @@ Function testPrivateAccessConfig(){
         [string]$UserUPN
     )
 
-    ConnectToEntraID
-    #Testing if tenant onboarded to GSA
-    try{
-        $GraphLink = "https://graph.microsoft.com/beta/networkAccess/tenantStatus"
-        $GraphResult = Invoke-GraphRequest -Uri $GraphLink
-    }catch{
-        Write-Log -Message "`nOperation aborted. Unable to connect to Microsoft Entra ID, please check you entered a correct credentials and you have the needed permissions`n`n" -ForegroundColor Red -Level ERROR
-        return $false
-    }
     Write-Log -Message "Checking the Global Secure Access activation status..." -ForegroundColor Yellow
-    if($GraphResult.onboardingStatus -eq 'onboarded'){
+    if (!$global:onboardingStatus){
+        ConnectToEntraID
+        #Testing if tenant onboarded to GSA
+        try{
+            $GraphLink = "https://graph.microsoft.com/beta/networkAccess/tenantStatus"
+            $GraphResult = Invoke-GraphRequest -Uri $GraphLink
+            $global:onboardingStatus = $GraphResult.onboardingStatus
+        }catch{
+            Write-Log -Message "`nOperation aborted. Unable to connect to Microsoft Entra ID, please check you entered a correct credentials and you have the needed permissions`n`n" -ForegroundColor Red -Level ERROR
+            return $false
+        }
+    }
+    if($global:onboardingStatus -eq 'onboarded'){
             #Tenant onboarded
             Write-Log -Message "Test passed: Global Secure Access is activated in the tenant`n" -ForegroundColor Green
         }else{
@@ -411,7 +415,7 @@ Function testPrivateAccessConfig(){
     }
     
     Write-Log -Message "Checking the Private Access forwarding profile..." -ForegroundColor Yellow
-    $PrivateProfile = $GraphResult.value | Where-Object -Property trafficForwardingType -eq 'private'
+    $PrivateProfile = $GraphResult.value
     if($PrivateProfile.state -ge 'enabled'){
         #Profile is enabled
         Write-Log -Message "Test passed: Private Access forwarding profile is enabled`n" -ForegroundColor Green

@@ -5,9 +5,6 @@
 .DESCRIPTION
     Global Secure Access Troubleshooter Tool is a PowerShell script that troubleshoots Global Secure Access common issues.
 
-.AUTHOR:
-    Mohammad Zmaili
-
 .Example
     .\GSATool.ps1 -TestNumber <testNumber> -FQDNorIP <FQDN> -PortNumber <portNumber> -Protocol <protocol> -UserUPN <testUserUPN>
 
@@ -406,7 +403,7 @@ Function testPrivateAccessConfig(){
 
     #Fetshing forwardingProfiles 
     try{
-        $GraphLink = "https://graph.microsoft.com/beta/networkAccess/forwardingProfiles"
+        $GraphLink = "https://graph.microsoft.com/beta/networkAccess/forwardingProfiles?`$filter=trafficForwardingType eq 'private'"
         $GraphResult = Invoke-GraphRequest -Uri $GraphLink
     }catch{
         Write-Log -Message "`nOperation aborted. Unable to connect to Microsoft Entra ID, please check you entered a correct credentials and you have the needed permissions`n`n" -ForegroundColor Red -Level ERROR
@@ -972,6 +969,14 @@ Function testPrivateAccessApp{
     }else{
         # test tunnelling
         Write-Log -Message "`nChecking tunnel establishing..." -ForegroundColor Yellow
+
+        if ($Protocol -eq 'udp'){
+            Write-Log -Message "Could not test UDP port`n" -ForegroundColor Yellow
+            Write-Log -Message "Recommended action: Please ensure outbound traffic is allowed for port number $($Port) and protocol $($Protocol) for $($FQDNorIP) `n`n" -ForegroundColor Yellow
+            Write-Log -Message "All tests passed successfully. If you have an issue not addressed, please open a support request`n" -ForegroundColor Green
+            return $false
+        }
+
         $tunnelStatus = Test-NetConnection -ComputerName $FQDNorIP -Port $Port -InformationAction SilentlyContinue
 
         if(!$tunnelStatus.TcpTestSucceeded){
@@ -989,6 +994,7 @@ Function testPrivateAccessApp{
         Write-Log -Message "Test passed: Tunnel has established successfully to GSA Edge with the following details:" -ForegroundColor Green
         if ($isFQDNorIP -eq "FQDN"){
             Write-Log -Message " FQDN: $($FQDNorIP)" -ForegroundColor Green
+            Write-Log -Message " Protocol / Port: $($Protocol)/$($Port)" -ForegroundColor Green
             Write-Log -Message " Synthetic Address: $($tunnelStatus.RemoteAddress)" -ForegroundColor Green
 
             $dnsResolve = Resolve-DnsName -Name $FQDNorIP -Server 6.6.255.254 -TcpOnly

@@ -39,7 +39,7 @@ Function Write-Log{
     [CmdletBinding()]
     Param(
         [Parameter(Mandatory=$False)]
-        [ValidateSet("INFO","WARN","ERROR","FATAL","DEBUG")]
+        [ValidateSet("INFO", "WARN", "ERROR", "FATAL", "DEBUG", "SUCCESS")]
         [String] $Level = "INFO",
 
         [Parameter(Mandatory=$True)]
@@ -125,7 +125,7 @@ Function testDeviceStatus{
     #Checking if device is connected to Entra ID:
     Write-Log -Message "Checking if the device is connected to Microsoft Entra ID..." -ForegroundColor Yellow
     if ($EntraConnected){
-        Write-Log -Message "Test passed: $($env:COMPUTERNAME) device is connected to Entra ID`n" -ForegroundColor Green
+        Write-Log -Message "Test passed: $($env:COMPUTERNAME) device is connected to Entra ID`n" -ForegroundColor Green -Level SUCCESS
     }else{
         Write-Log -Message "Test failed: $($env:COMPUTERNAME) device is NOT connected to Entra ID`n" -ForegroundColor Red -Level ERROR
         Write-Log -Message "Recommended action: Make sure your device is either Entra Joined or Hybrid Entra Joined`n`n" -ForegroundColor Yellow
@@ -140,7 +140,7 @@ Function testGSAServices{
     Write-Log -Message "Checking Tunneling Service..." -ForegroundColor Yellow
     $Service = (Get-Service -Name GlobalSecureAccessTunnelingService -ErrorAction SilentlyContinue).status
     if ($Service -eq 'Running'){
-        Write-Log -Message "Test passed: Tunneling Service is running`n" -ForegroundColor Green
+        Write-Log -Message "Test passed: Tunneling Service is running`n" -ForegroundColor Green -Level SUCCESS
     }else{
         Write-Log -Message "Test failed: Tunneling Service is not running`n" -ForegroundColor Red -Level ERROR
         Write-Log -Message "Recommended action: Make sure GlobalSecureAccessTunnelingService service is running`n`n" -ForegroundColor Yellow
@@ -151,7 +151,7 @@ Function testGSAServices{
     Write-Log -Message "Checking Management Service..." -ForegroundColor Yellow
     $Service = (Get-Service -Name GlobalSecureAccessClientManagerService -ErrorAction SilentlyContinue).status
     if ($Service -eq 'Running'){
-        Write-Log -Message "Test passed: Management Service is running`n" -ForegroundColor Green
+        Write-Log -Message "Test passed: Management Service is running`n" -ForegroundColor Green  -Level SUCCESS
     }else{
         Write-Log -Message "Test failed: Management Service is not running`n" -ForegroundColor Red -Level ERROR
         Write-Log -Message "Recommended action: Make sure GlobalSecureAccessClientManagerService service is running`n`n" -ForegroundColor Yellow
@@ -162,7 +162,7 @@ Function testGSAServices{
     Write-Log -Message "Checking Policy Retriever Service..." -ForegroundColor Yellow
     $Service = (Get-Service -Name GlobalSecureAccessPolicyRetrieverService -ErrorAction SilentlyContinue).status
     if ($Service -eq 'Running'){
-        Write-Log -Message "Test passed: Policy Retriever Service is running`n" -ForegroundColor Green
+        Write-Log -Message "Test passed: Policy Retriever Service is running`n" -ForegroundColor Green -Level SUCCESS
     }else{
         Write-Log -Message "Test failed: Policy Retriever Service is not running`n" -ForegroundColor Red -Level ERROR
         Write-Log -Message "Recommended action: Make sure GlobalSecureAccessPolicyRetrieverService service is running`n`n" -ForegroundColor Yellow
@@ -173,7 +173,7 @@ Function testGSAServices{
     Write-Log -Message "Checking GSA Driver Service..." -ForegroundColor Yellow
     $Service = (Get-Service -Name GlobalSecureAccessDriver -ErrorAction SilentlyContinue).status
     if ($Service -eq 'Running'){
-        Write-Log -Message "Test passed: GSA Driver Service is running`n" -ForegroundColor Green
+        Write-Log -Message "Test passed: GSA Driver Service is running`n" -ForegroundColor Green -Level SUCCESS
     }else{
         Write-Log -Message "Test failed: GSA Driver Service is not running`n" -ForegroundColor Red -Level ERROR
         Write-Log -Message "`nRecommended action: Make sure GlobalSecureAccessDriver service is running`n`n" -ForegroundColor Yellow
@@ -184,7 +184,7 @@ Function testGSAServices{
     Write-Log -Message "Checking Private Access registry key value..." -ForegroundColor Yellow
     $reg = Get-ItemProperty -Path 'Registry::HKCU\Software\Microsoft\Global Secure Access Client' -ErrorAction SilentlyContinue
     if ($reg.IsPrivateAccessDisabledByUser -ne 1){
-        Write-Log -Message "Test passed: Private Access is enabled`n" -ForegroundColor Green
+        Write-Log -Message "Test passed: Private Access is enabled`n" -ForegroundColor Green -Level SUCCESS
     }else{
         Write-Log -Message "Test failed: Private Access is disabled`n" -ForegroundColor Red -Level ERROR
         Write-Log -Message "`nRecommended action: Make sure 'IsPrivateAccessDisabledByUser' value is set to 0 in HKCU\Software\Microsoft\Global Secure Access Client`n`n" -ForegroundColor Yellow
@@ -333,18 +333,34 @@ Function Decode-JwtToken {
 
 Function ConnectToEntraID{
     Write-Log -Message "Checking if there is a valid Access Token..." -ForegroundColor Yellow
-    if ($global:accesstoken.Length -ge 1){
+    
+    $claims = Decode-JwtToken -jwtToken $global:accesstoken
+    $ExpirationTime = $claims.exp
+    # Get the current time in Unix epoch format
+    $currentTime = [int][double]::Parse((Get-Date -UFormat %s))
+    <#if (!$global:accesstoken -or ($currentTime -ge $ExpirationTime)){
+        ConnectToEntraID
+    }
+
+    if (!$global:onboardingStatus){
+        ConnectToEntraID
+
+    }#>
+
+
+    if ($global:accesstoken.Length -ge 1 -or ($currentTime -lt $ExpirationTime)){
         $headers = @{ 
                     'Authorization' = "Bearer $global:accesstoken"
                     }
         $GraphLink = "https://graph.microsoft.com/beta/networkAccess/tenantStatus"
         $GraphResult=$null
         $GraphResult = (Invoke-WebRequest -Headers $Headers -Uri $GraphLink -UseBasicParsing -Method "GET").Content | ConvertFrom-Json
+        if (!$GraphResult){ throw "404 Not Found" }
         if($GraphResult.'@odata.context'.length -ge 1){
             $claims = Decode-JwtToken -jwtToken $global:accesstoken
             $User_DisplayName=$claims.name
             $User_UPN=$claims.upn
-            Write-Log -Message "There is a valid Access Token for user: $User_DisplayName, UPN: $User_UPN`n" -ForegroundColor Green
+            Write-Log -Message "There is a valid Access Token for user: $User_DisplayName, UPN: $User_UPN`n" -ForegroundColor Green -Level SUCCESS
             $global:onboardingStatus = $GraphResult.onboardingStatus
         }else{
             Write-Log -Message "There no valid Access Token, please sign-in to get an Access Token" -ForegroundColor Yellow
@@ -356,6 +372,16 @@ Function ConnectToEntraID{
                 $User_DisplayName=$claims.name
                 $User_UPN=$claims.upn
                 Write-Log -Message "You signed-in successfully, and got an Access Token for user: $User_DisplayName, UPN: $User_UPN`n" -ForegroundColor Green
+                try{
+                    $GraphLink = "https://graph.microsoft.com/beta/networkAccess/tenantStatus"
+                    $GraphResult = Invoke-GraphRequest -Uri $GraphLink
+                    if (!$GraphResult){ throw "404 Not Found" }
+                    $global:onboardingStatus = $GraphResult.onboardingStatus
+                }catch{
+                    Write-Log -Message "`nOperation aborted. Unable to connect to Microsoft Entra ID, please check you entered a correct credentials and you have the needed permissions`n`n" -ForegroundColor Red -Level ERROR
+                    #return $false
+                    exit
+                }
             }
         }
     }else{
@@ -371,32 +397,48 @@ Function ConnectToEntraID{
         $claims = Decode-JwtToken -jwtToken $global:accesstoken
         $User_DisplayName=$claims.name
         $User_UPN=$claims.upn
-        Write-Log -Message "You signed-in successfully, and got an Access Token for user: $User_DisplayName, UPN: $User_UPN`n" -ForegroundColor Green
+        Write-Log -Message "You signed-in successfully, and got an Access Token for user: $User_DisplayName, UPN: $User_UPN`n" -ForegroundColor Green -Level SUCCESS
+        try{
+            $GraphLink = "https://graph.microsoft.com/beta/networkAccess/tenantStatus"
+            $GraphResult = Invoke-GraphRequest -Uri $GraphLink
+            if (!$GraphResult){ throw "404 Not Found" }
+            $global:onboardingStatus = $GraphResult.onboardingStatus
+        }catch{
+            Write-Log -Message "`nOperation aborted. Unable to connect to Microsoft Entra ID, please check you entered a correct credentials and you have the needed permissions`n`n" -ForegroundColor Red -Level ERROR
+            #return $false
+            exit
+        }
     }
-
+    
+    return $true
 }
 
 Function testPrivateAccessConfig(){
     param (
         [string]$UserUPN
     )
+    
+    #ConnectToEntraID
+    if (!(ConnectToEntraID)) {exit 1}
 
-    Write-Log -Message "Checking the Global Secure Access activation status..." -ForegroundColor Yellow
+    <#$claims = Decode-JwtToken -jwtToken $global:accesstoken
+    $ExpirationTime = $claims.exp
+    # Get the current time in Unix epoch format
+    $currentTime = [int][double]::Parse((Get-Date -UFormat %s))
+    if (!$global:accesstoken -or ($currentTime -ge $ExpirationTime)){
+        ConnectToEntraID
+    }
+
     if (!$global:onboardingStatus){
         ConnectToEntraID
-        #Testing if tenant onboarded to GSA
-        try{
-            $GraphLink = "https://graph.microsoft.com/beta/networkAccess/tenantStatus"
-            $GraphResult = Invoke-GraphRequest -Uri $GraphLink
-            $global:onboardingStatus = $GraphResult.onboardingStatus
-        }catch{
-            Write-Log -Message "`nOperation aborted. Unable to connect to Microsoft Entra ID, please check you entered a correct credentials and you have the needed permissions`n`n" -ForegroundColor Red -Level ERROR
-            return $false
-        }
-    }
+
+    }#>
+    
+    Write-Log -Message "Checking the Global Secure Access activation status..." -ForegroundColor Yellow
+    #Testing if tenant onboarded to GSA
     if($global:onboardingStatus -eq 'onboarded'){
             #Tenant onboarded
-            Write-Log -Message "Test passed: Global Secure Access is activated in the tenant`n" -ForegroundColor Green
+            Write-Log -Message "Test passed: Global Secure Access is activated in the tenant`n" -ForegroundColor Green -Level SUCCESS
         }else{
             #Tenant isn't onboarded
             Write-Log -Message "Test failed: Global Secure Access is NOT activated on the tenant`n" -ForegroundColor Red -Level ERROR
@@ -406,19 +448,20 @@ Function testPrivateAccessConfig(){
         }
 
     #Fetshing forwardingProfiles 
+    Write-Log -Message "Checking the Private Access forwarding profile..." -ForegroundColor Yellow
     try{
         $GraphLink = "https://graph.microsoft.com/beta/networkAccess/forwardingProfiles?`$filter=trafficForwardingType eq 'private'"
         $GraphResult = Invoke-GraphRequest -Uri $GraphLink
+        if (!$GraphResult){ throw "404 Not Found" }
     }catch{
         Write-Log -Message "`nOperation aborted. Unable to connect to Microsoft Entra ID, please check you entered a correct credentials and you have the needed permissions`n`n" -ForegroundColor Red -Level ERROR
         return $false
     }
     
-    Write-Log -Message "Checking the Private Access forwarding profile..." -ForegroundColor Yellow
     $PrivateProfile = $GraphResult.value
     if($PrivateProfile.state -ge 'enabled'){
         #Profile is enabled
-        Write-Log -Message "Test passed: Private Access forwarding profile is enabled`n" -ForegroundColor Green
+        Write-Log -Message "Test passed: Private Access forwarding profile is enabled`n" -ForegroundColor Green -Level SUCCESS
     }else{
         #Profile is disabled
         Write-Log -Message "Test failed: Private Access forwarding profile is NOT enabled`n" -ForegroundColor Red -Level ERROR
@@ -432,6 +475,7 @@ Function testPrivateAccessConfig(){
     try{
         $GraphLink = "https://graph.microsoft.com/v1.0/servicePrincipals/$($PrivateSPId)?`$select=id,appid,accountEnabled,appRoleAssignmentRequired&`$expand=appRoleAssignedTo(`$select=principalId,principalType,principalDisplayName)"
         $GraphResult = Invoke-GraphRequest -Uri $GraphLink
+        if (!$GraphResult){ throw "404 Not Found" }
     }catch{
         Write-Log -Message "`nOperation aborted. Unable to connect to Microsoft Entra ID, please check you entered a correct credentials and you have the needed permissions`n`n" -ForegroundColor Red -Level ERROR
         return $false
@@ -456,9 +500,7 @@ Function testPrivateAccessConfig(){
         try{
             $GraphLink = "https://graph.microsoft.com/v1.0/users/$($global:UserUPN)"
             $GraphResult = Invoke-GraphRequest -Uri $GraphLink
-            if (!$GraphResult) {
-                throw "404 Not Found"
-            }
+            if (!$GraphResult){ throw "404 Not Found" }
         }catch{
             Write-Log -Message "`nOperation aborted. Make sure to enter a valid UPN and you have the needed permissions`n`n" -ForegroundColor Red -Level ERROR
             return $false
@@ -489,6 +531,7 @@ Function testPrivateAccessConfig(){
                                 }
                         $GraphLink = "https://graph.microsoft.com/beta/users/$($global:UserUPN)/checkMemberGroups"
                         $GraphResult = Invoke-GraphRequest -Uri $GraphLink -Method "POST" -Body $body
+                        if (!$GraphResult){ throw "404 Not Found" }
                         $Groups = $GraphResult.value
                         if ($Groups.Count -ge 1){
                             # User is member of at least one group
@@ -529,15 +572,15 @@ Function testPAApplication{
 
     
     # Fetshing selected app SP:
+    Write-Log -Message "Checking Private Access application status..." -ForegroundColor Yellow
     try{
         $GraphLink = "https://graph.microsoft.com/v1.0/servicePrincipals?`$filter=appid eq '$($PAappID)'&`$select=id,appid,accountEnabled,appRoleAssignmentRequired&`$expand=appRoleAssignedTo(`$select=principalId,principalType,principalDisplayName)"
         $GraphResult = Invoke-GraphRequest -Uri $GraphLink
+        if (!$GraphResult){ throw "404 Not Found" }
     }catch{
         Write-Log -Message "`nOperation aborted. Unable to connect to Microsoft Entra ID, please check you entered a correct credentials and you have the needed permissions`n`n" -ForegroundColor Red -Level ERROR
         return $false
     }
-
-    Write-Log -Message "Checking Private Access application status..." -ForegroundColor Yellow
     $isSPEnabled = $GraphResult.value.accountEnabled
     if (!$isSPEnabled){
         Write-Log -Message "Test Failed: '$($PappDisplayName)' Private Access application is disabled`n" -ForegroundColor Red -Level ERROR
@@ -575,6 +618,7 @@ Function testPAApplication{
                                 }
                         $GraphLink = "https://graph.microsoft.com/beta/users/$($global:UserUPN)/checkMemberGroups"
                         $GraphResult = Invoke-GraphRequest -Uri $GraphLink -Method "POST" -Body $body
+                        if (!$GraphResult){ throw "404 Not Found" }
                         $Groups = $GraphResult.value
                         if ($Groups.Count -ge 1){
                             # User is member of at least one group
@@ -604,6 +648,7 @@ Function testPAApplication{
     try{
         $GraphLink = "https://graph.microsoft.com/beta/applications/$($PAAppObjID)/onPremisesPublishing/segmentsConfiguration/microsoft.graph.ipSegmentConfiguration/applicationSegments"
         $GraphResult = Invoke-GraphRequest -Uri $GraphLink
+        if (!$GraphResult){ throw "404 Not Found" }
     }catch{
         Write-Log -Message "`nOperation aborted. Unable to connect to Microsoft Entra ID, please check you entered a correct credentials and you have the needed permissions`n`n" -ForegroundColor Red -Level ERROR
         return $false
@@ -797,7 +842,7 @@ Function testGSAClient{
         Write-Log -Message "`nRecommended action: Please ensure Private Access forwarding profile is enabled and user is assigned in Entra portal under Global Secure Access > Connect > Traffic forwarding`n`n" -ForegroundColor Yellow
         return $false
     }
-    Write-Log -Message "Test passed: Private Access forwarding profile configuration has retrieved`n" -ForegroundColor Green
+    Write-Log -Message "Test passed: Private Access forwarding profile configuration has retrieved`n" -ForegroundColor Green -Level SUCCESS
 
     #Testing connectivity to primary, secondary, diagnostic URLs
     $primaryEdges = $jsonObject.policy.channels[0].edgesSettings.primaryEdges[0].edgeAddress
@@ -815,11 +860,11 @@ Function testGSAClient{
             Write-Log -Message "`nRecommended action: Please ensure there is Internet connectivity to the following Private Access Edges is enabled:`n$($primaryEdges)`n$($secondaryEdges)`n`n" -ForegroundColor Yellow
             return $false
         }else{
-            Write-Log -Message "Test passed: connection to the Private Access Edge succeeded`n" -ForegroundColor Green
+            Write-Log -Message "Test passed: connection to the Private Access Edge succeeded`n" -ForegroundColor Green -Level SUCCESS
         }
 
     }else{
-        Write-Log -Message "Test passed: connection to the Private Access Edge succeeded`n" -ForegroundColor Green
+        Write-Log -Message "Test passed: connection to the Private Access Edge succeeded`n" -ForegroundColor Green -Level SUCCESS
     }
 
     #Testing connectivity to connectivity URLs
@@ -830,7 +875,7 @@ Function testGSAClient{
         Write-Log -Message "`nRecommended action: Please ensure outound traffic to 'https://private.edgediagnostic.globalsecureaccess.microsoft.com/connectivitytest/ping' is allowed`n`n" -ForegroundColor Yellow
         return $false
     }else{
-        Write-Log -Message "Test passed: connectivity to Private Access is healthy`n" -ForegroundColor Green
+        Write-Log -Message "Test passed: connectivity to Private Access is healthy`n" -ForegroundColor Green -Level SUCCESS
     }
     
     return $true
@@ -871,35 +916,37 @@ Function Test-IPorFQDN {
 
 Function Convert-DecimalToIP {
     param (
-        [int64]$Decimal
+        [UInt32]$Decimal
     )
     
-    # Convert decimal to IP address format
-    $Octet1 = ($Decimal -shr 24) -band 255
-    $Octet2 = ($Decimal -shr 16) -band 255
-    $Octet3 = ($Decimal -shr 8) -band 255
-    $Octet4 = $Decimal -band 255
+    # Convert decimal to IP address (big-endian)
+    $bytes = [BitConverter]::GetBytes($Decimal)
+    [Array]::Reverse($bytes)  # Ensure big-endian
+    return [System.Net.IPAddress]::new($bytes).ToString()
+}
+
+Function Convert-IPToDecimal {
+    param (
+        [string]$IPAddress
+    )
     
-    return "$Octet1.$Octet2.$Octet3.$Octet4"
+    $bytes = [System.Net.IPAddress]::Parse($IPAddress).GetAddressBytes()
+    [Array]::Reverse($bytes)  # Convert to little-endian for UInt32
+    return [BitConverter]::ToUInt32($bytes, 0)
 }
 
 Function Test-IPExists {
        param (
-        $Start,
-        $End,
-        $testIP
+        [UInt32]$Start,
+        [UInt32]$End,
+        [string]$testIP
     ) 
-
     # convert IP 
     $firstIP = Convert-DecimalToIP -Decimal $Start
     $lastIP = Convert-DecimalToIP -Decimal $End
-
-    $startIPInt = [BitConverter]::ToUInt32([System.Net.IPAddress]::Parse($firstIP).GetAddressBytes(), 0)
-    $endIPInt = [BitConverter]::ToUInt32([System.Net.IPAddress]::Parse($lastIP).GetAddressBytes(), 0)
-    $testIPInt = [BitConverter]::ToUInt32([System.Net.IPAddress]::Parse($testIP).GetAddressBytes(), 0)
-
+    $testIPInt = Convert-IPToDecimal -IPAddress $testIP
     # Check if the test IP is within the range
-    if ($testIPInt -ge $startIPInt -and $testIPInt -le $endIPInt) {
+    if ($testIPInt -ge $Start -and $testIPInt -le $End) {
         #The IP address $testIP is within the range of $firstIP and $lastIP
         return $true
     } else {
@@ -931,23 +978,23 @@ Function Test-PortExists{
 }
 
 Function testPrivateAccessApp{
-    param (
+     param (
         $appID,
         $FQDNorIP,
         $Port,
         $Protocol
-    ) 
+    )
+    Write-Log -Message "`nChecking the Private Access Application configuration...`n" -ForegroundColor Yellow
     try{
         $GraphLink = "https://graph.microsoft.com/beta/applications?`$select=displayName,appId,id,tags,createdDateTime,createdDateTime,servicePrincipalNames&`$filter=appid eq '$($appID)'"
         $GraphResult = Invoke-GraphRequest -Uri $GraphLink
+        if (!$GraphResult){ throw "404 Not Found" }
     }catch{
         Write-Log -Message "`nOperation aborted. Unable to connect to Microsoft Entra ID, please check you entered a correct credentials and you have the needed permissions`n`n" -ForegroundColor Red -Level ERROR
         return $false
     }
 
     $forwardingProfiles = $GraphResult.value
-    Write-Log -Message "`nChecking the Private Access Application configuration...`n" -ForegroundColor Yellow
-
     $PAPort = $Port
     $PAProtocol = $Protocol
     $PAAppObjID = $forwardingProfiles.id
@@ -973,53 +1020,66 @@ Function testPrivateAccessApp{
     }else{
         # test tunnelling
         Write-Log -Message "`nChecking tunnel establishing..." -ForegroundColor Yellow
-
         if ($Protocol -eq 'udp'){
             Write-Log -Message "Could not test UDP port`n" -ForegroundColor Yellow
-            Write-Log -Message "Recommended action: Please ensure outbound traffic is allowed for port number $($Port) and protocol $($Protocol) for $($FQDNorIP) `n`n" -ForegroundColor Yellow
-            Write-Log -Message "All tests passed successfully. If you have an issue not addressed, please open a support request`n" -ForegroundColor Green
-            return $false
-        }
-
-        $tunnelStatus = Test-NetConnection -ComputerName $FQDNorIP -Port $Port -InformationAction SilentlyContinue
-
-        if(!$tunnelStatus.TcpTestSucceeded){
-            Write-Log -Message "`nTest failed: Connection has not established to GSA edge`n" -ForegroundColor Red -Level ERROR
-            Write-Log -Message "Recommended action: Please ensure outbound traffic is allowed for port number $($Port) and protocol $($Protocol) `n`n" -ForegroundColor Yellow
-            return $false
-        }
-        $isFQDNorIP = Test-IPorFQDN -FQDNorIP $FQDNorIP
-        if (($isFQDNorIP -eq "FQDN") -and (!($tunnelStatus.RemoteAddress.IPAddressToString -like "6.6.*"))){
-            Write-Log -Message "`nTest failed: Connection has not tunneled`n" -ForegroundColor Red -Level ERROR
-            Write-Log -Message "Recommended action: Please ensure outbound traffic is allowed for port number $($Port) and protocol $($Protocol) `n`n" -ForegroundColor Yellow
-            return $false
-        }
-
-        Write-Log -Message "Test passed: Tunnel has established successfully to GSA Edge with the following details:" -ForegroundColor Green
-        if ($isFQDNorIP -eq "FQDN"){
-            Write-Log -Message " FQDN: $($FQDNorIP)" -ForegroundColor Green
-            Write-Log -Message " Protocol / Port: $($Protocol)/$($Port)" -ForegroundColor Green
-            Write-Log -Message " Synthetic Address: $($tunnelStatus.RemoteAddress)" -ForegroundColor Green
-
-            $dnsResolve = Resolve-DnsName -Name $FQDNorIP -Server 6.6.255.254 -TcpOnly
-            if ($dnsResolve){
-                Write-Log -Message " Internal Address : $($dnsResolve.IPAddress)" -ForegroundColor Green
+            return $true
+            <#if (Test-Path -Path .\psping.exe){
+                $IPandPort = "$($FQDNorIP):$($Port)"
+                $r = .\psping.exe $IPandPort -u -n 1 -accepteula #-ErrorAction SilentlyContinue
+                if ($r -cmatch '100% loss'){
+                    Write-Log -Message "`nTest failed: Connection has not established to GSA Edge`n" -ForegroundColor Red -Level ERROR
+                    Write-Log -Message "Recommended action: Please ensure outbound traffic is allowed for port number $($Port) and protocol $($Protocol) for $($FQDNorIP) `n`n" -ForegroundColor Yellow
+                    return $false
+                }else{
+                    #UDP port opened
+                    $syntaticIP = ($r | Select-String -Pattern "TCP connect to (\d{1,3}\.){3}\d{1,3}" | ForEach-Object { ($_ -split " ")[3].TrimEnd(':') }) -replace ":\d+", ""
+                }
             }else{
-                #dns does not resolve
-                Write-Log -Message "`nTest failed: could not resolve DNS name for $($FQDNorIP)`n" -ForegroundColor Red -Level ERROR
-                Write-Log -Message "Recommended action: Ensure you have entered a valid dns record, configured Private DNS, and connector server is able to resolve DNS names`n`n" -ForegroundColor Yellow
-                exit
-                retuen $false
+                Write-Log -Message "Could not test UDP port`n" -ForegroundColor Yellow
+                Write-Log -Message "Recommended action: Please ensure outbound traffic is allowed for port number $($Port) and protocol $($Protocol) for $($FQDNorIP) `n`n" -ForegroundColor Yellow
+                Write-Log -Message "All tests passed successfully. If you have an issue not addressed, please open a support request`n" -ForegroundColor Green -Level SUCCESS
+                return $false
+            }#>
+        }else{
+        #TCP port
+            $tunnelStatus = Test-NetConnection -ComputerName $FQDNorIP -Port $Port -InformationAction SilentlyContinue
+            $syntaticIP = $tunnelStatus.RemoteAddress
+            if(!$tunnelStatus.TcpTestSucceeded){
+                Write-Log -Message "`nTest failed: Connection has not established to GSA Edge`n" -ForegroundColor Red -Level ERROR
+                Write-Log -Message "Recommended action: Please ensure outbound traffic is allowed for port number $($Port) and protocol $($Protocol) for $($FQDNorIP) `n`n" -ForegroundColor Yellow
+                return $false
             }
-        }elseif ($isFQDNorIP -eq "ip"){
-            Write-Log -Message " IP Address: $($FQDNorIP)" -ForegroundColor Green
-            Write-Log -Message " Port Number: $($Port)" -ForegroundColor Green
-            Write-Log -Message " Protocol: $($Protocol)" -ForegroundColor Green
         }
+
+            $isFQDNorIP = Test-IPorFQDN -FQDNorIP $FQDNorIP
+            if (($isFQDNorIP -eq "FQDN") -and (!($syntaticIP -like "6.6.*"))){
+                Write-Log -Message "`nTest failed: Connection has not tunneled`n" -ForegroundColor Red -Level ERROR
+                Write-Log -Message "Recommended action: Please ensure outbound traffic is allowed for port number $($Port) and protocol $($Protocol) `n`n" -ForegroundColor Yellow
+                return $false
+            }
+
+            Write-Log -Message "Test passed: Tunnel has established successfully to GSA Edge with the following details:" -ForegroundColor Green -Level SUCCESS
+            if ($isFQDNorIP -eq "FQDN"){
+                Write-Log -Message "`tFQDN: $($FQDNorIP)" -ForegroundColor Green
+                Write-Log -Message "`tProtocol / Port: $($Protocol)/$($Port)" -ForegroundColor Green
+                Write-Log -Message "`tSynthetic Address: $($syntaticIP)" -ForegroundColor Green
+
+                $dnsResolve = Resolve-DnsName -Name $FQDNorIP -Server 6.6.255.254 -TcpOnly
+                if ($dnsResolve){
+                    Write-Log -Message "`tInternal Address : $($dnsResolve.IPAddress)" -ForegroundColor Green
+                }else{
+                    #dns does not resolve
+                    Write-Log -Message "`nTest failed: could not resolve internal DNS name for $($FQDNorIP)`n" -ForegroundColor Red -Level ERROR
+                    Write-Log -Message "Recommended action: Ensure you have entered a valid dns record, configured Private DNS, and the Private Network Connector server is able to resolve the entered DNS name`n`n" -ForegroundColor Yellow
+                    exit
+                    retuen $false
+                }
+            }elseif ($isFQDNorIP -eq "ip"){
+                Write-Log -Message "`tIP Address: $($FQDNorIP)" -ForegroundColor Green
+                Write-Log -Message "`tPort Number: $($Port)" -ForegroundColor Green
+                Write-Log -Message "`tProtocol: $($Protocol)" -ForegroundColor Green
+            }
         
-        #Write-Log -Message " Synthetic Address: $($tunnelStatus.RemoteAddress)" -ForegroundColor Green
-
-
     }
 
     return $true
@@ -1068,7 +1128,7 @@ Function testPrivateAccessRules{
                     $PortExists = $true
                     if ($rule.matchingCriteria.protocol -eq $Protocol){
                         $ProtocolExists = $true
-                        Write-Log -Message "`nRule ID: $($rule.id) is configured to allow traffic with the following settings:`nIP Address: $($FQDNorIP)`nPort Number: $Port`nProtocol: $($Protocol)`n" -ForegroundColor Green
+                        Write-Log -Message "The forwarding profile is configured to allow traffic with the following settings:`n`tRule ID: $($rule.id)`n`tApp ID: $($appID)`n`tIP Address: $($FQDNorIP)`n`tPort Number: $Port`n`tProtocol: $($Protocol)`n" -ForegroundColor Green
                         break
                     }
                 }
@@ -1175,27 +1235,27 @@ Function PrivateDNS{
 }
 
 Clear-Host
-Write-Log -Message "=======================================================" -ForegroundColor Green 
-Write-Log -Message "`tGlobal Secure Access Troubleshooting Tool"  -ForegroundColor Green 
-Write-Log -Message "=======================================================`n" -ForegroundColor Green 
-Write-Log -Message "Please submit your feedback at aka.ms/GSAToolFeedback`n" -ForegroundColor Yellow
-Write-Log -Message "Enter (1) to troubleshoot Entra Microsoft Traffic`n" -ForegroundColor Green
-Write-Log -Message "Enter (2) to troubleshoot Microsoft Entra Private Access`n" -ForegroundColor Green
-Write-Log -Message "Enter (3) to troubleshoot Microsoft Entra Internet Access`n" -ForegroundColor Green
-Write-Log -Message "Enter (4) to troubleshoot Microsoft Entra Private DNS`n" -ForegroundColor Green
-Write-Log -Message "Enter (Q) to Quit`n" -ForegroundColor Green
+Write-Host -Message "=======================================================" -ForegroundColor Green
+Write-Host -Message "`tGlobal Secure Access Troubleshooting Tool"  -ForegroundColor Green 
+Write-Host -Message "=======================================================`n" -ForegroundColor Green 
+Write-Host -Message "Please submit your feedback at aka.ms/GSAToolFeedback`n" -ForegroundColor Yellow
+Write-Host -Message "Enter (1) to troubleshoot Entra Microsoft Traffic`n" -ForegroundColor Green
+Write-Host -Message "Enter (2) to troubleshoot Microsoft Entra Private Access`n" -ForegroundColor Green
+Write-Host -Message "Enter (3) to troubleshoot Microsoft Entra Internet Access`n" -ForegroundColor Green
+Write-Host -Message "Enter (4) to troubleshoot Microsoft Entra Private DNS`n" -ForegroundColor Green
+Write-Host -Message "Enter (Q) to Quit`n" -ForegroundColor Green
 
-Add-Content ".\GSATool.log" -Value "`n==========================================================" -ErrorAction SilentlyContinue
+Add-Content ".\GSATool.log" -Value "`n=======================================================================`n=======================================================================" -ErrorAction SilentlyContinue
 if($Error[0].Exception.Message -ne $null){
     if($Error[0].Exception.Message.Contains('denied')){
         Write-Log -Message "Was not able to create log file.`n" -ForegroundColor Yellow
     }else{
-        Write-Log -Message "The GSATool log file has been created.`n" -ForegroundColor Yellow
+        Write-Log -Message "The GSATool.log file has been created under $((Get-Location).Path)`n" -ForegroundColor Yellow
     }
 }else{
-    Write-Log -Message "The GSATool log file has been created.`n" -ForegroundColor Yellow
+    Write-Log -Message "The GSATool.log file has been created under $((Get-Location).Path)`n" -ForegroundColor Yellow
 }
-Add-Content ".\GSATool.log" -Value "=======================================================" -ErrorAction SilentlyContinue
+#Add-Content ".\GSATool.log" -Value "=======================================================" -ErrorAction SilentlyContinue
 
 if (!$TestNumber){
     $TestNumber = Read-Host -Prompt "Please make a selection, and press Enter" 
@@ -1222,4 +1282,4 @@ if($TestNumber -eq '1'){
     exit
 }
 
-Write-Log -Message "`nAll tests passed successfully. If you have an issue not addressed, please open a support request`n" -ForegroundColor Green
+Write-Log -Message "`nAll tests passed successfully. If you have an issue not addressed, please open a support request`n" -ForegroundColor Green -Level SUCCESS

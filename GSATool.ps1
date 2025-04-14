@@ -1235,15 +1235,15 @@ Function PrivateDNS{
 }
 
 Clear-Host
-Write-Host -Message "=======================================================" -ForegroundColor Green
-Write-Host -Message "`tGlobal Secure Access Troubleshooting Tool"  -ForegroundColor Green 
-Write-Host -Message "=======================================================`n" -ForegroundColor Green 
-Write-Host -Message "Please submit your feedback at aka.ms/GSAToolFeedback`n" -ForegroundColor Yellow
-Write-Host -Message "Enter (1) to troubleshoot Entra Microsoft Traffic`n" -ForegroundColor Green
-Write-Host -Message "Enter (2) to troubleshoot Microsoft Entra Private Access`n" -ForegroundColor Green
-Write-Host -Message "Enter (3) to troubleshoot Microsoft Entra Internet Access`n" -ForegroundColor Green
-Write-Host -Message "Enter (4) to troubleshoot Microsoft Entra Private DNS`n" -ForegroundColor Green
-Write-Host -Message "Enter (Q) to Quit`n" -ForegroundColor Green
+Write-Host "=======================================================" -ForegroundColor Green
+Write-Host "`tGlobal Secure Access Troubleshooting Tool"  -ForegroundColor Green 
+Write-Host "=======================================================`n" -ForegroundColor Green 
+Write-Host "Please submit your feedback at aka.ms/GSAToolFeedback`n" -ForegroundColor Yellow
+Write-Host "Enter (1) to troubleshoot Entra Microsoft Traffic`n" -ForegroundColor Green
+Write-Host "Enter (2) to troubleshoot Microsoft Entra Private Access`n" -ForegroundColor Green
+Write-Host "Enter (3) to troubleshoot Microsoft Entra Internet Access`n" -ForegroundColor Green
+Write-Host "Enter (4) to troubleshoot Microsoft Entra Private DNS`n" -ForegroundColor Green
+Write-Host "Enter (Q) to Quit`n" -ForegroundColor Green
 
 Add-Content ".\GSATool.log" -Value "`n=======================================================================`n=======================================================================" -ErrorAction SilentlyContinue
 if($Error[0].Exception.Message -ne $null){

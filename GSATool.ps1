@@ -5,8 +5,20 @@
 .DESCRIPTION
     Global Secure Access Troubleshooter Tool is a PowerShell script that troubleshoots Global Secure Access common issues.
 
+.PARAMETER TestMicrosoftTraffic
+    Use it to troubleshoot Entra Microsoft Traffic
+
+.PARAMETER TestPrivateAccess
+    Use it to troubleshoot Microsoft Entra Private Access
+
+.PARAMETER TestInternetAccess
+    Use it to troubleshoot Microsoft Entra Internet Access
+
+.PARAMETER TestPrivateDNS
+    Use it to troubleshoot Microsoft Entra Private DNS
+
 .Example
-    .\GSATool.ps1 -TestNumber <testNumber> -FQDNorIP <FQDN> -PortNumber <portNumber> -Protocol <protocol> -UserUPN <testUserUPN>
+    .\GSATool.ps1 -TestPrivateAccess -FQDNorIP <FQDN> -PortNumber <portNumber> -Protocol <protocol> -UserUPN <testUserUPN>
 
 .EXAMPLE
     .\GSATool.ps1
@@ -32,7 +44,19 @@ Param (
     [string] $Protocol,
 
     [Parameter(Mandatory=$false)]
-    [mailaddress] $UserUPN   
+    [mailaddress] $UserUPN,
+
+    [Parameter(Mandatory=$false)]
+    [switch] $TestMicrosoftTraffic,
+
+    [Parameter(Mandatory=$false)]
+    [switch] $TestPrivateAccess,
+
+    [Parameter(Mandatory=$false)]
+    [switch] $TestInternetAccess,
+
+    [Parameter(Mandatory=$false)]
+    [switch] $TestPrivateDNS
 )
 
 Function Write-Log{
@@ -1255,26 +1279,24 @@ if($Error[0].Exception.Message -ne $null){
 }else{
     Write-Log -Message "The GSATool.log file has been created under $((Get-Location).Path)`n" -ForegroundColor Yellow
 }
-#Add-Content ".\GSATool.log" -Value "=======================================================" -ErrorAction SilentlyContinue
 
-if (!$TestNumber){
+if (!$TestNumber -and !$TestMicrosoftTraffic -and !$TestPrivateAccess -and !$TestInternetAccess -and !$TestPrivateDNS){
     $TestNumber = Read-Host -Prompt "Please make a selection, and press Enter" 
-    While(($TestNumber -ne '1') -AND ($TestNumber -ne '2') -AND ($TestNumber -ne '3') -AND ($TestNumber -ne '4') -AND ($TestNumber -ne '5') -AND ($TestNumber -ne '6') -AND ($TestNumber -ne '7') -AND ($TestNumber -ne 'Q')){
+    While(($TestNumber -ne '1') -AND ($TestNumber -ne '2') -AND ($TestNumber -ne '3') -AND ($TestNumber -ne '4') -AND ($TestNumber -ne 'Q')){
         $TestNumber = Read-Host -Prompt "Invalid input. Please make a correct selection from the above options, and press Enter" 
     }
 }
 
-
-if($TestNumber -eq '1'){
+if($TestNumber -eq '1' -or $TestMicrosoftTraffic){
     Write-Log -Message "`nTroubleshoot Entra Microsoft Traffic option has been chosen`n"
     EntraMicrosoft365
-}elseif($TestNumber -eq '2'){
+}elseif($TestNumber -eq '2' -or $TestPrivateAccess){
     Write-Log -Message "`nTroubleshoot Microsoft Entra Private Access option has been chosen`n"
     EntraPrivateAccess
-}elseif($TestNumber -eq '3'){
+}elseif($TestNumber -eq '3' -or $TestInternetAccess){
     Write-Log -Message "`nTroubleshoot Microsoft Entra Internet Access option has been chosen`n"
     EntraInternetAccess
-}elseif($TestNumber -eq '4'){
+}elseif($TestNumber -eq '4' -or $TestPrivateDNS){
     Write-Log -Message "`nTroubleshoot Entra Private DNS option has been chosen`n"
     PrivateDNS
 }else{

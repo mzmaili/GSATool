@@ -493,6 +493,26 @@ Function testPrivateAccessConfig(){
         return $false
     }
     
+    #getting user objectID
+    $msg = "Please enter UPN (or press ENTER to use the signed in user: $($global:UserUPN)`)"
+    if (!$UserUPN){ $EnteredUPN = Read-Host -Prompt $msg }else {$EnteredUPN = $UserUPN}
+    if (![string]::IsNullOrEmpty($EnteredUPN)) {
+        $global:UserUPN = $EnteredUPN
+    }
+    try{
+        $GraphLink = "https://graph.microsoft.com/v1.0/users/$($global:UserUPN)"
+        $GraphResult = Invoke-GraphRequest -Uri $GraphLink
+        if (!$GraphResult){ throw "404 Not Found" }
+    }catch{
+        Write-Log -Message "`nOperation aborted. Make sure to enter a valid UPN and you have the needed permissions`n`n" -ForegroundColor Red -Level ERROR
+        return $false
+    }
+    $EntraUser = $GraphResult
+    if($EntraUser.id.Length -ge 1){
+        #User returned
+        $global:userObjID = $EntraUser.id
+    }
+
     #Fetshing Private profile SP
     Write-Log -Message "Checking user assignments to the Private Access forwarding profile..." -ForegroundColor Yellow
     $PrivateSPId = $PrivateProfile.servicePrincipal.id
@@ -504,37 +524,18 @@ Function testPrivateAccessConfig(){
         Write-Log -Message "`nOperation aborted. Unable to connect to Microsoft Entra ID, please check you entered a correct credentials and you have the needed permissions`n`n" -ForegroundColor Red -Level ERROR
         return $false
     }
+
     $appRoleAssignedToUsers = $GraphResult.appRoleAssignedTo | Where-Object -Property principalType -eq 'User'
     $appRoleAssignedToGroups = ($GraphResult.appRoleAssignedTo | Where-Object -Property principalType -eq 'Group' | Select-Object -Property principalId).principalId
     $appRoleAssignment = $GraphResult.appRoleAssignmentRequired
     if($appRoleAssignment -eq $false){
         #All users are assigned
-        Write-Log -Message "All users are assigned to Private access profile`n" -ForegroundColor Green
+        Write-Log -Message "All users are assigned to Private access profile" -ForegroundColor Green
     }else{
         #Selected users/groups are assigned.
         Write-Log -Message "Limited users are assigned to Private access profile`n" -ForegroundColor Yellow
         Write-Log -Message "Checking if the user is directly assigned to Private access profile..." -ForegroundColor Yellow
-        #Checking if user is assigned to Private access profile
-        #getting user objectID
-        $msg = "Please enter UPN (or press ENTER to use the signed in user: $($global:UserUPN)`)"
-        if (!$UserUPN){ $EnteredUPN = Read-Host -Prompt $msg }else {$EnteredUPN = $UserUPN}
-        if (![string]::IsNullOrEmpty($EnteredUPN)) {
-            $global:UserUPN = $EnteredUPN
-        }
-        try{
-            $GraphLink = "https://graph.microsoft.com/v1.0/users/$($global:UserUPN)"
-            $GraphResult = Invoke-GraphRequest -Uri $GraphLink
-            if (!$GraphResult){ throw "404 Not Found" }
-        }catch{
-            Write-Log -Message "`nOperation aborted. Make sure to enter a valid UPN and you have the needed permissions`n`n" -ForegroundColor Red -Level ERROR
-            return $false
-        }
-        $EntraUser = $GraphResult
-        if($EntraUser.id.Length -ge 1){
-            #User returned
-            $global:userObjID = $EntraUser.id
-        }
-        #Checking if the user directly assigned
+        #Checking if user is assigned directly to Private access profile
         try{
             #Search if the user assigned
             $userassigned = $false
@@ -649,8 +650,8 @@ Function testPAApplication{
                             Write-Log -Message "$($global:UserUPN) user is a member of a group assigned to Private access application: $($PappDisplayName)" -ForegroundColor Green
                         }else{
                             Write-Log -Message "Test failed: user is not member of any of groups assigned to Private access application: $($PappDisplayName)`n" -ForegroundColor Red -Level ERROR
-                            Write-Log -Message "`nRecommended action: Please ensure the user is directly assigned to the Private Access application : $($PappDisplayName) or is a member of a group assigned to it`n`n" -ForegroundColor Yellow
-                            return $false
+                            Write-Log -Message "`nRecommended action: Please ensure the user is directly assigned to the Private Access application: $($PappDisplayName) or is a member of a group assigned to it`n`n" -ForegroundColor Yellow
+                            exit
                         }
                     }catch{
                         Write-Log -Message "`nOperation aborted. Unable to connect to Microsoft Entra ID, please check you entered a correct credentials and you have the needed permissions`n`n" -ForegroundColor Red -Level ERROR
@@ -716,11 +717,14 @@ Function testPAApplication{
             if ($ProtocolFound){
                 Write-Log -Message "$($PAProtocol) protocol is configured for port number $($portNumber)" -ForegroundColor Green
             }else{
-                Write-Log -Message "$($PAProtocol) protocol is NOT configured for port number $($portNumber)" -ForegroundColor Red -Level ERROR
-                return $false
+                Write-Log -Message "$($PAProtocol) protocol is NOT configured for port number $($portNumber)`n`n" -ForegroundColor Red -Level ERROR
+                Write-Log -Message "Recommended action: Ensure you enter a correct protocol and its configured in the Private Access Application: $($PappDisplayName)`n`n" -ForegroundColor Yellow
+                #return $false
+                exit
             }
         }else{
             Write-Log -Message "Port $portNumber is NOT configured for Private Access application: $($PappDisplayName)" -ForegroundColor Red -Level ERROR
+            Write-Log -Message "Recommended action: Ensure you enter a correct port number and its configured in the Private Access Application: $($PappDisplayName)`n`n" -ForegroundColor Yellow
             return $false
         }
 
@@ -822,11 +826,14 @@ Function testPAApplication{
             if ($ProtocolFound){
                 Write-Log -Message "$($PAProtocol) protocol is configured for port number $($portNumber)" -ForegroundColor Green
             }else{
-                Write-Log -Message "$($PAProtocol) protocol is NOT configured for port number $($portNumber)" -ForegroundColor Red -Level ERROR
-                return $false
+                Write-Log -Message "$($PAProtocol) protocol is NOT configured for port number $($portNumber)`n`n" -ForegroundColor Red -Level ERROR
+                Write-Log -Message "Recommended action: Ensure you enter a correct protocol and its configured in the Private Access Application: $($PappDisplayName)`n`n" -ForegroundColor Yellow
+                #return $false
+                exit
             }
         }else{
-            Write-Log -Message "Port $portNumber is NOT configured for Private Access application: $($PappDisplayName)" -ForegroundColor Red -Level ERROR
+            Write-Log -Message "Port $portNumber is NOT configured for the Private Access application: $($PappDisplayName)" -ForegroundColor Red -Level ERROR
+            Write-Log -Message "Recommended action: Ensure you enter a correct port number and its configured in the Private Access Application: $($PappDisplayName)`n`n" -ForegroundColor Yellow
             return $false
         }
 
@@ -1036,12 +1043,7 @@ Function testPrivateAccessApp{
 
     $testQAAppResult = $false
     $testPAAppResult = testPAApplication -PAappID $PAappID -PappDisplayName $PappDisplayName -PAAppObjID $PAAppObjID -portNumber $PAPort -PAProtocol $PAProtocol -FQDNorIP $FQDNorIP
-    if (!$testPAAppResult){
-        Write-Log -Message "`nTest Failed: selected port and/or protocol is not configured in the selected Private Access application: $($PappDisplayName). Also, not configured in Quick Access Application`n" -ForegroundColor Red -Level ERROR
-        Write-Log -Message "Recommended action: Please ensure both port and protocol are configured in a Private Access application`n`n" -ForegroundColor Yellow
-        return $false
-        
-    }else{
+    if ($testPAAppResult){
         # test tunnelling
         Write-Log -Message "`nChecking tunnel establishing..." -ForegroundColor Yellow
         if ($Protocol -eq 'udp'){

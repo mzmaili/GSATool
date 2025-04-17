@@ -403,8 +403,7 @@ Function ConnectToEntraID{
                     $global:onboardingStatus = $GraphResult.onboardingStatus
                 }catch{
                     Write-Log -Message "`nOperation aborted. Unable to connect to Microsoft Entra ID, please check you entered a correct credentials and you have the needed permissions`n`n" -ForegroundColor Red -Level ERROR
-                    #return $false
-                    exit
+                    return $false
                 }
             }
         }
@@ -415,7 +414,7 @@ Function ConnectToEntraID{
         if (!($global:accesstoken.Length -ge 1)){
             Write-Log -Message "`nOperation aborted. Unable to connect to Microsoft Entra ID, please check you entered a correct credentials and you have the needed permissions`n" -ForegroundColor Red -Level ERROR
             Write-Log -Message "Recommended action: Ensure that you have entered valid credentials and completed the sign-in process`n`n" -ForegroundColor Yellow
-            exit
+            return $false
         }
         # Decode the token
         $claims = Decode-JwtToken -jwtToken $global:accesstoken
@@ -429,8 +428,7 @@ Function ConnectToEntraID{
             $global:onboardingStatus = $GraphResult.onboardingStatus
         }catch{
             Write-Log -Message "`nOperation aborted. Unable to connect to Microsoft Entra ID, please check you entered a correct credentials and you have the needed permissions`n`n" -ForegroundColor Red -Level ERROR
-            #return $false
-            exit
+            return $false
         }
     }
     
@@ -467,7 +465,6 @@ Function testPrivateAccessConfig(){
             #Tenant isn't onboarded
             Write-Log -Message "Test failed: Global Secure Access is NOT activated on the tenant`n" -ForegroundColor Red -Level ERROR
             Write-Log -Message "`nRecommended action: Activate Global Secure Access in your tennat by navigating to Global Secure Access > Get started > Activate Global Secure Access in your tenant, select Activate`n`n" -ForegroundColor Yellow
-            exit
             return $false
         }
 
@@ -610,7 +607,6 @@ Function testPAApplication{
     if (!$isSPEnabled){
         Write-Log -Message "Test Failed: '$($PappDisplayName)' Private Access application is disabled`n" -ForegroundColor Red -Level ERROR
         Write-Log -Message "Recommended Action: Please ensure enable Private Access application: $($PappDisplayName).`n`n" -ForegroundColor Yellow
-        exit
         return $false
     }
     Write-Log -Message "'$($PappDisplayName)' Private Access application is enabled`n" -ForegroundColor Green
@@ -651,7 +647,7 @@ Function testPAApplication{
                         }else{
                             Write-Log -Message "Test failed: user is not member of any of groups assigned to Private access application: $($PappDisplayName)`n" -ForegroundColor Red -Level ERROR
                             Write-Log -Message "`nRecommended action: Please ensure the user is directly assigned to the Private Access application: $($PappDisplayName) or is a member of a group assigned to it`n`n" -ForegroundColor Yellow
-                            exit
+                            return $false
                         }
                     }catch{
                         Write-Log -Message "`nOperation aborted. Unable to connect to Microsoft Entra ID, please check you entered a correct credentials and you have the needed permissions`n`n" -ForegroundColor Red -Level ERROR
@@ -719,11 +715,11 @@ Function testPAApplication{
             }else{
                 Write-Log -Message "$($PAProtocol) protocol is NOT configured for port number $($portNumber)`n`n" -ForegroundColor Red -Level ERROR
                 Write-Log -Message "Recommended action: Ensure you enter a correct protocol and its configured in the Private Access Application: $($PappDisplayName)`n`n" -ForegroundColor Yellow
-                #return $false
-                exit
+                return $false
+                #exit
             }
         }else{
-            Write-Log -Message "Port $portNumber is NOT configured for Private Access application: $($PappDisplayName)" -ForegroundColor Red -Level ERROR
+            Write-Log -Message "Port $portNumber is NOT configured for Private Access application: $($PappDisplayName)`n`n" -ForegroundColor Red -Level ERROR
             Write-Log -Message "Recommended action: Ensure you enter a correct port number and its configured in the Private Access Application: $($PappDisplayName)`n`n" -ForegroundColor Yellow
             return $false
         }
@@ -828,11 +824,10 @@ Function testPAApplication{
             }else{
                 Write-Log -Message "$($PAProtocol) protocol is NOT configured for port number $($portNumber)`n`n" -ForegroundColor Red -Level ERROR
                 Write-Log -Message "Recommended action: Ensure you enter a correct protocol and its configured in the Private Access Application: $($PappDisplayName)`n`n" -ForegroundColor Yellow
-                #return $false
-                exit
+                return $false
             }
         }else{
-            Write-Log -Message "Port $portNumber is NOT configured for the Private Access application: $($PappDisplayName)" -ForegroundColor Red -Level ERROR
+            Write-Log -Message "Port $portNumber is NOT configured for the Private Access application: $($PappDisplayName)`n`n" -ForegroundColor Red -Level ERROR
             Write-Log -Message "Recommended action: Ensure you enter a correct port number and its configured in the Private Access Application: $($PappDisplayName)`n`n" -ForegroundColor Yellow
             return $false
         }
@@ -1043,7 +1038,9 @@ Function testPrivateAccessApp{
 
     $testQAAppResult = $false
     $testPAAppResult = testPAApplication -PAappID $PAappID -PappDisplayName $PappDisplayName -PAAppObjID $PAAppObjID -portNumber $PAPort -PAProtocol $PAProtocol -FQDNorIP $FQDNorIP
-    if ($testPAAppResult){
+    if (!$testPAAppResult){
+        exit 1
+    }else{
         # test tunnelling
         Write-Log -Message "`nChecking tunnel establishing..." -ForegroundColor Yellow
         if ($Protocol -eq 'udp'){
@@ -1097,7 +1094,6 @@ Function testPrivateAccessApp{
                     #dns does not resolve
                     Write-Log -Message "`nTest failed: could not resolve internal DNS name for $($FQDNorIP)`n" -ForegroundColor Red -Level ERROR
                     Write-Log -Message "Recommended action: Ensure you have entered a valid dns record, configured Private DNS, and the Private Network Connector server is able to resolve the entered DNS name`n`n" -ForegroundColor Yellow
-                    exit
                     retuen $false
                 }
             }elseif ($isFQDNorIP -eq "ip"){
@@ -1161,20 +1157,26 @@ Function testPrivateAccessRules{
             }
         }
 
+
+
         If (!$IPExists){
             Write-Log -Message "IP Address is not configured for a Private Access application`n" -ForegroundColor Red -Level ERROR
             Write-Log -Message "Recommended action: Ensure you enter a valid IP Address and its configured in an Private Access application`n`n" -ForegroundColor Yellow
             return $false
+        }else{
+            Write-Log -Message "$FQDNorIP found in Forwarding Profile configuration" -ForegroundColor Green
         }
 
         If (!$PortExists){
-            Write-Log -Message "Port $Port is NOT configured for the Private Access application (App ID: $($appID))`n" -ForegroundColor Red -Level ERROR
+            Write-Log -Message "Port $Port is NOT configured for the Private Access application (App ID: $($appID))`n`n" -ForegroundColor Red -Level ERROR
             Write-Log -Message "Recommended action: Ensure you enter a correct port number and its configured in the Private Access Application (App ID: $($appID))`n`n" -ForegroundColor Yellow
             return $false
+        }else{
+            Write-Log -Message "$Port port found configured for $FQDNorIP in Forwarding Profile configuration" -ForegroundColor Green
         }
 
         If (!$ProtocolExists){
-            Write-Log -Message "$($Protocol) protocol is NOT configured for port number $($Port) for the Private Access application: (App ID: $($appID)" -ForegroundColor Red -Level ERROR
+            Write-Log -Message "$($Protocol) protocol is NOT configured for port number $($Port) for the Private Access application: (App ID: $($appID))" -ForegroundColor Red -Level ERROR
             Write-Log -Message "Recommended action: Ensure you enter a correct protocol and its configured in the Private Access Application (App ID: $($appID))`n`n" -ForegroundColor Yellow
             return $false
         }
@@ -1206,19 +1208,23 @@ Function testPrivateAccessRules{
         }
 
         If (!$FQDNExists){
-            Write-Log -Message "Entered FQDN is not configured for a Private Access application`n" -ForegroundColor Red -Level ERROR
+            Write-Log -Message "Entered FQDN is not configured for a Private Access application`n`n" -ForegroundColor Red -Level ERROR
             Write-Log -Message "Recommended action: Ensure you enter a valid FQDN and its configured in an Private Access application`n`n" -ForegroundColor Yellow
             return $false
+        }else{
+            Write-Log -Message "$FQDNorIP found in Forwarding Profile configuration" -ForegroundColor Green
         }
 
         If (!$PortExists){
-            Write-Log -Message "Port $Port is NOT configured for the Private Access application (App ID: $($appID))`n" -ForegroundColor Red -Level ERROR
+            Write-Log -Message "Port $Port is NOT configured for the Private Access application (App ID: $($appID))`n`n" -ForegroundColor Red -Level ERROR
             Write-Log -Message "Recommended action: Ensure you enter a correct port number and its configured in the Private Access Application (App ID: $($appID))`n`n" -ForegroundColor Yellow
             return $false
+        }else{
+            Write-Log -Message "$Port port found configured for $FQDNorIP in Forwarding Profile configuration" -ForegroundColor Green
         }
 
         If (!$ProtocolExists){
-            Write-Log -Message "$($Protocol) protocol is NOT configured for port number $($Port) for the Private Access application: (App ID: $($appID)`n" -ForegroundColor Red -Level ERROR
+            Write-Log -Message "$($Protocol) protocol is NOT configured for port number $($Port) for the Private Access application: (App ID: $($appID))`n`n" -ForegroundColor Red -Level ERROR
             Write-Log -Message "Recommended action: Ensure you enter a correct protocol and its configured in the Private Access Application (App ID: $($appID))`n`n" -ForegroundColor Yellow
             return $false
         }

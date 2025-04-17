@@ -1141,15 +1141,18 @@ Function testPrivateAccessRules{
         $ProtocolExists = $false
         foreach ($rule in $rulesWithIP){
             $audienceScope = $rule.appAuthorizationTokenContext.audienceScope
-            $appID = [regex]::Match($audienceScope, "api://([^/]+)").Groups[1].Value
+            #$appID = [regex]::Match($audienceScope, "api://([^/]+)").Groups[1].Value
             if (Test-IPExists -Start ($rule.matchingCriteria.address.ips).start -End ($rule.matchingCriteria.address.ips).end -testIP $FQDNorIP){
                 # IP exists, checking ports and protocols
                 $IPExists = $true
+                $appID = [regex]::Match($audienceScope, "api://([^/]+)").Groups[1].Value
                 if (Test-PortExists -ports $rule.matchingCriteria.ports -testPort $Port){
                     # port exists, checking the protocol
                     $PortExists = $true
+                    $appID = [regex]::Match($audienceScope, "api://([^/]+)").Groups[1].Value
                     if ($rule.matchingCriteria.protocol -eq $Protocol){
                         $ProtocolExists = $true
+                        $appID = [regex]::Match($audienceScope, "api://([^/]+)").Groups[1].Value
                         Write-Log -Message "The forwarding profile is configured to allow traffic with the following settings:`n`tRule ID: $($rule.id)`n`tApp ID: $($appID)`n`tIP Address: $($FQDNorIP)`n`tPort Number: $Port`n`tProtocol: $($Protocol)`n" -ForegroundColor Green
                         break
                     }
@@ -1160,23 +1163,22 @@ Function testPrivateAccessRules{
 
 
         If (!$IPExists){
-            Write-Log -Message "IP Address is not configured for a Private Access application`n" -ForegroundColor Red -Level ERROR
+            Write-Log -Message "Entered IP Address '$($FQDNorIP)' is not configured for a Private Access application`n" -ForegroundColor Red -Level ERROR
             Write-Log -Message "Recommended action: Ensure you enter a valid IP Address and its configured in an Private Access application`n`n" -ForegroundColor Yellow
             return $false
-        }else{
-            Write-Log -Message "$FQDNorIP found in Forwarding Profile configuration" -ForegroundColor Green
         }
 
         If (!$PortExists){
+            Write-Log -Message "$FQDNorIP found in Forwarding Profile configuration" -ForegroundColor Green
             Write-Log -Message "Port $Port is NOT configured for the Private Access application (App ID: $($appID))`n`n" -ForegroundColor Red -Level ERROR
             Write-Log -Message "Recommended action: Ensure you enter a correct port number and its configured in the Private Access Application (App ID: $($appID))`n`n" -ForegroundColor Yellow
             return $false
-        }else{
-            Write-Log -Message "$Port port found configured for $FQDNorIP in Forwarding Profile configuration" -ForegroundColor Green
         }
 
         If (!$ProtocolExists){
-            Write-Log -Message "$($Protocol) protocol is NOT configured for port number $($Port) for the Private Access application: (App ID: $($appID))" -ForegroundColor Red -Level ERROR
+            Write-Log -Message "$FQDNorIP found in Forwarding Profile configuration" -ForegroundColor Green
+            Write-Log -Message "$Port port found configured for $FQDNorIP in Forwarding Profile configuration" -ForegroundColor Green
+            Write-Log -Message "$($Protocol) protocol is NOT configured for port number $($Port) for the Private Access application: (App ID: $($appID))`n" -ForegroundColor Red -Level ERROR
             Write-Log -Message "Recommended action: Ensure you enter a correct protocol and its configured in the Private Access Application (App ID: $($appID))`n`n" -ForegroundColor Yellow
             return $false
         }
@@ -1188,16 +1190,20 @@ Function testPrivateAccessRules{
         $ProtocolExists = $false
         foreach ($rule in $rulesWithFQDN){
             $audienceScope = $rule.appAuthorizationTokenContext.audienceScope
-            $appID = [regex]::Match($audienceScope, "api://([^/]+)").Groups[1].Value
+            #$appID = [regex]::Match($audienceScope, "api://([^/]+)").Groups[1].Value
             foreach ($FQDNregex in $rule.matchingCriteria.address.fqdns){
-                if ($FQDNorIP -match $FQDNregex){
+                #if ($FQDNorIP -match $FQDNregex){
+                if ($FQDNorIP -match "^$FQDNregex$") {
                     # FQDN exists, checking ports and protocols
                     $FQDNExists = $true
+                    $appID = [regex]::Match($audienceScope, "api://([^/]+)").Groups[1].Value
                     if (Test-PortExists -ports $rule.matchingCriteria.ports -testPort $Port){
                         # port exists, checking the protocol
                         $PortExists = $true
+                        $appID = [regex]::Match($audienceScope, "api://([^/]+)").Groups[1].Value
                         if ($rule.matchingCriteria.protocol -eq $Protocol){
                             $ProtocolExists = $true
+                            $appID = [regex]::Match($audienceScope, "api://([^/]+)").Groups[1].Value
                             Write-Log -Message "The forwarding profile is configured to allow traffic with the following settings:`n`tRule ID: $($rule.id)`n`tApp ID: $($appID)`n`tFQDN: $($FQDNorIP)`n`tPort Number: $Port`n`tProtocol: $($Protocol)`n" -ForegroundColor Green
                             break
                         }
@@ -1208,22 +1214,21 @@ Function testPrivateAccessRules{
         }
 
         If (!$FQDNExists){
-            Write-Log -Message "Entered FQDN is not configured for a Private Access application`n`n" -ForegroundColor Red -Level ERROR
+            Write-Log -Message "Entered FQDN '$($FQDNorIP)' is not configured for a Private Access application`n`n" -ForegroundColor Red -Level ERROR
             Write-Log -Message "Recommended action: Ensure you enter a valid FQDN and its configured in an Private Access application`n`n" -ForegroundColor Yellow
             return $false
-        }else{
-            Write-Log -Message "$FQDNorIP found in Forwarding Profile configuration" -ForegroundColor Green
         }
 
         If (!$PortExists){
+            Write-Log -Message "$FQDNorIP found in Forwarding Profile configuration" -ForegroundColor Green
             Write-Log -Message "Port $Port is NOT configured for the Private Access application (App ID: $($appID))`n`n" -ForegroundColor Red -Level ERROR
             Write-Log -Message "Recommended action: Ensure you enter a correct port number and its configured in the Private Access Application (App ID: $($appID))`n`n" -ForegroundColor Yellow
             return $false
-        }else{
-            Write-Log -Message "$Port port found configured for $FQDNorIP in Forwarding Profile configuration" -ForegroundColor Green
         }
 
         If (!$ProtocolExists){
+            Write-Log -Message "$FQDNorIP found in Forwarding Profile configuration" -ForegroundColor Green
+            Write-Log -Message "$Port port found configured for $FQDNorIP in Forwarding Profile configuration" -ForegroundColor Green
             Write-Log -Message "$($Protocol) protocol is NOT configured for port number $($Port) for the Private Access application: (App ID: $($appID))`n`n" -ForegroundColor Red -Level ERROR
             Write-Log -Message "Recommended action: Ensure you enter a correct protocol and its configured in the Private Access Application (App ID: $($appID))`n`n" -ForegroundColor Yellow
             return $false

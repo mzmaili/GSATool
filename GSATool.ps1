@@ -1093,8 +1093,8 @@ Function testPrivateAccessApp{
                 }else{
                     #dns does not resolve
                     Write-Log -Message "`nTest failed: could not resolve internal DNS name for $($FQDNorIP)`n" -ForegroundColor Red -Level ERROR
-                    Write-Log -Message "Recommended action: Ensure you have entered a valid dns record, configured Private DNS, and the Private Network Connector server is able to resolve the entered DNS name`n`n" -ForegroundColor Yellow
-                    retuen $false
+                    Write-Log -Message "Recommended action: Ensure you have entered a valid DNS record, configured Private DNS, and the Private Network Connector server is able to resolve the entered DNS name`n`n" -ForegroundColor Yellow
+                    return $false
                 }
             }elseif ($isFQDNorIP -eq "ip"){
                 Write-Log -Message "`tIP Address: $($FQDNorIP)" -ForegroundColor Green
@@ -1163,7 +1163,7 @@ Function testPrivateAccessRules{
 
 
         If (!$IPExists){
-            Write-Log -Message "Entered IP Address '$($FQDNorIP)' is not configured for a Private Access application`n" -ForegroundColor Red -Level ERROR
+            Write-Log -Message "Entered IP Address '$($FQDNorIP)' is not configured for any Private Access application`n" -ForegroundColor Red -Level ERROR
             Write-Log -Message "Recommended action: Ensure you enter a valid IP Address and its configured in an Private Access application`n`n" -ForegroundColor Yellow
             return $false
         }
@@ -1214,7 +1214,7 @@ Function testPrivateAccessRules{
         }
 
         If (!$FQDNExists){
-            Write-Log -Message "Entered FQDN '$($FQDNorIP)' is not configured for a Private Access application`n`n" -ForegroundColor Red -Level ERROR
+            Write-Log -Message "Entered FQDN '$($FQDNorIP)' is not configured for any Private Access application`n`n" -ForegroundColor Red -Level ERROR
             Write-Log -Message "Recommended action: Ensure you enter a valid FQDN and its configured in an Private Access application`n`n" -ForegroundColor Yellow
             return $false
         }

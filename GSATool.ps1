@@ -1235,7 +1235,9 @@ Function testPrivateAccessRules{
         }
 
     }else{
-        Write-Log -Message "Not IP or FQDN"
+        Write-Log -Message "Entered FQDN '$($FQDNorIP)' is invalid FQDN or IP Address`n`n" -ForegroundColor Red -Level ERROR
+        Write-Log -Message "Recommended action: Ensure you enter a correct FQDN or IP address`n`n" -ForegroundColor Yellow
+        return $false
     }
 
 

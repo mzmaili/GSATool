@@ -12,6 +12,9 @@ Download and run the GSATool.ps1 script from [this](https://github.com/mzmai
 ## Submit feedback 
 You can submit feedback, suggestions, or comments at https://aka.ms/GSAToolFeedback.  
 
+## User experience
+![Alt text](/media/GSATool.png "GSATool")
+
 ## What assessments does GSATool conduct? 
 
 ### 1- Troubleshoot Entra Microsoft Traffic 
@@ -93,9 +96,6 @@ You can submit feedback, suggestions, or comments at https://aka.ms/GSAToolFeedb
   - Testing if connection has established to SSE edge with the provided port and protocol. If so, the tool retrieves syntactic address. 
   - Testing the internal DNS record for the target resource. If found, the tool retrieves internal addresses. 
 
-## User experience
-![Alt text](/media/GSATool.png "GSATool")
-
 ## Frequently asked questions
 ### Does the script change anything?
 No, It just retrieves data.
@@ -104,4 +104,4 @@ No, It just retrieves data.
 No, the script does not require any PowerShell module.
 
 ### Will the tool fix the issue when it detects it?
-No, it identifies the issue and suggest recommended steps to fix it.
+No, it identifies the issue and suggests recommended steps to fix it.

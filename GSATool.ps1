@@ -1,6 +1,6 @@
 ﻿<#
 .SYNOPSIS
-    GSATool V2.1 PowerShell script.
+    GSATool V2.2 PowerShell script.
 
 .DESCRIPTION
     Global Secure Access Troubleshooter Tool is a PowerShell script that troubleshoots Global Secure Access common issues.
@@ -911,7 +911,7 @@ Function testGSAClientProfile{
 
     #Testing connectivity to diagnostic URLs
     Write-Log -Message "Checking connectivity to $($profileName) diagnostic endpoint..." -ForegroundColor Yellow
-    $healthTest = Invoke-WebRequest -Uri $diagnosticUri
+    $healthTest = Invoke-WebRequest -Uri $diagnosticUri -UseBasicParsing
     if (!($healthTest.StatusCode -eq 200 -and $healthTest.Content -eq 'pong')){
         Write-Log -Message "Test Failed: unable to connect to $($profileName) diagnostic endpoint" -ForegroundColor Red -Level ERROR
         Write-Log -Message "`nRecommended action: Please ensure outbound traffic to $diagnosticUri is allowed`n`n" -ForegroundColor Yellow

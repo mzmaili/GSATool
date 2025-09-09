@@ -1,6 +1,6 @@
 ﻿<#
 .SYNOPSIS
-    GSATool V2.2 PowerShell script.
+    GSATool V2.3 PowerShell script.
 
 .DESCRIPTION
     Global Secure Access Troubleshooter Tool is a PowerShell script that troubleshoots Global Secure Access common issues.
@@ -139,7 +139,7 @@ Function Invoke-GraphRequest {
 }
 
 Function GSAToolStart{
-    Write-Log -Message "GSATool 2.1 has started" -ForegroundColor Yellow
+    Write-Log -Message "GSATool 2.3 has started" -ForegroundColor Yellow
     Write-Log -Message ([String]::Format("Device Name : {0}",$env:computername))  -ForegroundColor Yellow
     $global:LoggedOnUserUPN=whoami /upn
     $msg = "User Account: $(whoami), UPN: $($global:LoggedOnUserUPN)`n"
@@ -191,36 +191,38 @@ Function testGSAServices{
         Exit-GSATool 1
     }
 
-    #Checking Management Service:
-    Write-Log -Message "Checking Management Service..." -ForegroundColor Yellow
+    #Checking Client Manager Service:
+    Write-Log -Message "Checking Client Manager Service..." -ForegroundColor Yellow
     $Service = (Get-Service -Name GlobalSecureAccessClientManagerService -ErrorAction SilentlyContinue).status
     if ($Service -eq 'Running'){
-        Write-Log -Message "Test passed: Management Service is running`n" -ForegroundColor Green  -Level SUCCESS
+        Write-Log -Message "Test passed: Client Manager Service is running`n" -ForegroundColor Green  -Level SUCCESS
     }else{
-        Write-Log -Message "Test failed: Management Service is not running`n" -ForegroundColor Red -Level ERROR
+        Write-Log -Message "Test failed: Client Manager Service is not running`n" -ForegroundColor Red -Level ERROR
         Write-Log -Message "Recommended action: Make sure GlobalSecureAccessClientManagerService service is running`n`n" -ForegroundColor Yellow
         Exit-GSATool 1
     }
 
-    #Checking Policy Retriever Service:
-    Write-Log -Message "Checking Policy Retriever Service..." -ForegroundColor Yellow
+    #Checking Forwarding Profile Service:
+    Write-Log -Message "Checking Forwarding Profile Service..." -ForegroundColor Yellow
     $Service = (Get-Service -Name GlobalSecureAccessPolicyRetrieverService -ErrorAction SilentlyContinue).status
-    if ($Service -eq 'Running'){
-        Write-Log -Message "Test passed: Policy Retriever Service is running`n" -ForegroundColor Green -Level SUCCESS
+    $service2 = (Get-Service -Name GlobalSecureAccessForwardingProfileService -ErrorAction SilentlyContinue).status
+    if ($Service -eq 'Running' -or $Service2 -eq 'Running'){
+        Write-Log -Message "Test passed: Forwarding Profile Service is running`n" -ForegroundColor Green -Level SUCCESS
     }else{
-        Write-Log -Message "Test failed: Policy Retriever Service is not running`n" -ForegroundColor Red -Level ERROR
-        Write-Log -Message "Recommended action: Make sure GlobalSecureAccessPolicyRetrieverService service is running`n`n" -ForegroundColor Yellow
+        Write-Log -Message "Test failed: Forwarding Profile Service is not running`n" -ForegroundColor Red -Level ERROR
+        Write-Log -Message "Recommended action: Make sure GlobalSecureAccessForwardingProfileService service is running`n`n" -ForegroundColor Yellow
         Exit-GSATool 1
     }
 
     #Checking Management Service:
-    Write-Log -Message "Checking GSA Driver Service..." -ForegroundColor Yellow
+    Write-Log -Message "Checking GSA Engine Service..." -ForegroundColor Yellow
     $Service = (Get-Service -Name GlobalSecureAccessDriver -ErrorAction SilentlyContinue).status
-    if ($Service -eq 'Running'){
-        Write-Log -Message "Test passed: GSA Driver Service is running`n" -ForegroundColor Green -Level SUCCESS
+    $Service2 = (Get-Service -Name GlobalSecureAccessEngineService -ErrorAction SilentlyContinue).status
+    if ($Service -eq 'Running' -or $Service2 -eq 'Running'){
+        Write-Log -Message "Test passed: GSA Engine Service is running`n" -ForegroundColor Green -Level SUCCESS
     }else{
-        Write-Log -Message "Test failed: GSA Driver Service is not running`n" -ForegroundColor Red -Level ERROR
-        Write-Log -Message "`nRecommended action: Make sure GlobalSecureAccessDriver service is running`n`n" -ForegroundColor Yellow
+        Write-Log -Message "Test failed: GSA Engine Service is not running`n" -ForegroundColor Red -Level ERROR
+        Write-Log -Message "`nRecommended action: Make sure GlobalSecureAccessEngineService service is running`n`n" -ForegroundColor Yellow
         Exit-GSATool 1
     }
 

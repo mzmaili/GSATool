@@ -1,6 +1,6 @@
 ﻿<#
 .SYNOPSIS
-    GSATool V2.3 PowerShell script.
+    GSATool V2.4 PowerShell script.
 
 .DESCRIPTION
     Global Secure Access Troubleshooter Tool is a PowerShell script that troubleshoots Global Secure Access common issues.
@@ -1173,7 +1173,7 @@ Function testPrivateAccessRules{
                     # port exists, checking the protocol
                     $PortExists = $true
                     $appID = [regex]::Match($audienceScope, "api://([^/]+)").Groups[1].Value
-                    if ($rule.matchingCriteria.protocol -eq $Protocol){
+                    if ($rule.matchingCriteria.protocol -eq $Protocol -or $rule.matchingCriteria.protocol -eq 'All'){
                         $ProtocolExists = $true
                         $appID = [regex]::Match($audienceScope, "api://([^/]+)").Groups[1].Value
                         Write-Log -Message "The forwarding profile is configured to allow traffic with the following settings:`n`tRule ID: $($rule.id)`n`tApp ID: $($appID)`n`tIP Address: $($FQDNorIP)`n`tPort Number: $Port`n`tProtocol: $($Protocol)`n" -ForegroundColor Green
@@ -1224,7 +1224,7 @@ Function testPrivateAccessRules{
                         # port exists, checking the protocol
                         $PortExists = $true
                         $appID = [regex]::Match($audienceScope, "api://([^/]+)").Groups[1].Value
-                        if ($rule.matchingCriteria.protocol -eq $Protocol){
+                        if ($rule.matchingCriteria.protocol -eq $Protocol -or $rule.matchingCriteria.protocol -eq 'All'){
                             $ProtocolExists = $true
                             $appID = [regex]::Match($audienceScope, "api://([^/]+)").Groups[1].Value
                             Write-Log -Message "The forwarding profile is configured to allow traffic with the following settings:`n`tRule ID: $($rule.id)`n`tApp ID: $($appID)`n`tFQDN: $($FQDNorIP)`n`tPort Number: $Port`n`tProtocol: $($Protocol)`n" -ForegroundColor Green

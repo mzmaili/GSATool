@@ -1,6 +1,6 @@
 ﻿<#
 .SYNOPSIS
-    GSATool V2.4 PowerShell script.
+    GSATool V2.5 PowerShell script.
 
 .DESCRIPTION
     Global Secure Access Troubleshooter Tool is a PowerShell script that troubleshoots Global Secure Access common issues.
@@ -139,7 +139,7 @@ Function Invoke-GraphRequest {
 }
 
 Function GSAToolStart{
-    Write-Log -Message "GSATool 2.3 has started" -ForegroundColor Yellow
+    Write-Log -Message "GSATool 2.5 has started" -ForegroundColor Yellow
     Write-Log -Message ([String]::Format("Device Name : {0}",$env:computername))  -ForegroundColor Yellow
     $global:LoggedOnUserUPN=whoami /upn
     $msg = "User Account: $(whoami), UPN: $($global:LoggedOnUserUPN)`n"
@@ -253,103 +253,185 @@ Function testGSAServices{
 }
 
 Function Connect-AzureDevicelogin {
+    # Authenticates the user to Microsoft Entra ID using the OAuth 2.0
+    # Authorization Code flow with PKCE and an http://localhost loopback redirect.
+    # No PowerShell module is required and no tenant configuration is needed —
+    # the script uses the well-known Microsoft Azure PowerShell public client,
+    # which has http://localhost pre-registered as a redirect URI.
+    #
+    # The function name, parameters, and return value (the access_token string)
+    # are kept identical to the previous device-code implementation so all
+    # existing callers continue to work unchanged.
     [cmdletbinding()]
-    param( 
+    param(
+        # Microsoft Graph Command Line Tools (a.k.a. Microsoft Graph PowerShell).
+        # This first-party public client is preauthorized for Microsoft Graph
+        # delegated scopes and has http://localhost registered as a redirect URI,
+        # so no tenant configuration is required and standard user/admin consent
+        # works (unlike the Azure PowerShell client which AAD blocks for
+        # arbitrary Graph scopes with AADSTS65002).
         [Parameter()]
-        $ClientID = 'd3590ed6-52b3-4102-aeff-aad2292ab01c',
-        
+        $ClientID = '14d82eec-204b-4c2f-b7e8-296a70dab67e',
+
+        # Explicit delegated Graph scopes required by GSATool. Using explicit
+        # scopes (instead of '/.default') ensures AAD prompts an admin to
+        # consent for any permission that isn't yet granted in the tenant —
+        # '.default' would silently issue a token missing those permissions
+        # and the script would later fail with a misleading "no permissions"
+        # error even for a Global Administrator.
         [Parameter()]
-        $Scope = 'https://graph.microsoft.com/.default NetworkAccess.Read.All Application.Read.All',
-                
+        $Scope = 'https://graph.microsoft.com/NetworkAccess.Read.All https://graph.microsoft.com/Application.Read.All https://graph.microsoft.com/Directory.Read.All https://graph.microsoft.com/User.Read.All',
+
         [Parameter()]
         [switch]$Interactive,
-        
+
         [Parameter()]
         $TenantID = 'common',
-        
+
         [Parameter()]
         $Resource = "https://graph.microsoft.com/",
-        
-        # Timeout in seconds to wait for user to complete sign in process
+
+        # Timeout in seconds to wait for the user to complete the sign-in process
         [Parameter(DontShow)]
-        $Timeout = 1
-        #$Timeout = 300
+        $Timeout = 300
     )
+
+    Add-Type -AssemblyName System.Web | Out-Null
+
+    # --- PKCE: random code_verifier and SHA256 code_challenge (S256) ---
+    $verifierBytes = New-Object byte[] 32
+    [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($verifierBytes)
+    $codeVerifier  = [Convert]::ToBase64String($verifierBytes).TrimEnd('=').Replace('+','-').Replace('/','_')
+
+    $sha256        = [System.Security.Cryptography.SHA256]::Create()
+    $challengeHash = $sha256.ComputeHash([System.Text.Encoding]::ASCII.GetBytes($codeVerifier))
+    $codeChallenge = [Convert]::ToBase64String($challengeHash).TrimEnd('=').Replace('+','-').Replace('/','_')
+
+    # --- Anti-CSRF state value ---
+    $stateBytes = New-Object byte[] 16
+    [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($stateBytes)
+    $state = [Convert]::ToBase64String($stateBytes).TrimEnd('=').Replace('+','-').Replace('/','_')
+
+    # --- Bind a free loopback port and start the HTTP listener ---
+    $listener = $null
+    $port     = $null
+    foreach ($candidate in 8400..8500) {
+        $tmp = $null
+        try {
+            $tmp = [System.Net.HttpListener]::new()
+            $tmp.Prefixes.Add("http://localhost:$candidate/")
+            $tmp.Start()
+            $listener = $tmp
+            $port     = $candidate
+            break
+        } catch {
+            if ($tmp) { try { $tmp.Close() } catch {} }
+        }
+    }
+    if (-not $listener) {
+        throw "Unable to bind a local loopback port (8400-8500) for the sign-in callback."
+    }
+
+    $redirectUri = "http://localhost:$port"
+
     try {
-        $DeviceCodeRequestParams = @{
-            Method = 'POST'
-            Uri    = "https://login.microsoftonline.com/$tenantId/oauth2/v2.0/devicecode"
-            ContentType = "application/x-www-form-urlencoded"
-            Body   = @{
-                client_id = $ClientId
-                scope = 'https://graph.microsoft.com/.default'
-            }
+        # --- Build the /authorize URL ---
+        $authParams = [ordered]@{
+            client_id             = $ClientID
+            response_type         = 'code'
+            redirect_uri          = $redirectUri
+            response_mode         = 'query'
+            scope                 = "$Scope offline_access openid profile"
+            state                 = $state
+            code_challenge        = $codeChallenge
+            code_challenge_method = 'S256'
+            prompt                = 'select_account'
         }
-        $DeviceCodeRequest = Invoke-RestMethod @DeviceCodeRequestParams
- 
-        # Copy device code to clipboard
-        $DeviceCode = ($DeviceCodeRequest.message -split "code " | Select-Object -Last 1) -split " to authenticate."
-        Set-Clipboard -Value $DeviceCode
-        Write-Host "`nDevice code " -ForegroundColor Yellow -NoNewline
-        Write-Host $DeviceCode -ForegroundColor Green -NoNewline
-        Write-Host "has been copied to the clipboard, please paste it into the opened 'Microsoft Graph Authentication' window, complete the sign in, and close the window to proceed." -ForegroundColor Yellow
-        Write-Host "Note: If 'Microsoft Graph Authentication' window didn't open,"($DeviceCodeRequest.message -split "To sign in, " | Select-Object -Last 1) -ForegroundColor gray
-        $msg= "Device code $DeviceCode has been copied to the clipboard, please paste it into the opened 'Microsoft Graph Authentication' window, complete the signin, and close the window to proceed.`n                                 Note: If 'Microsoft Graph Authentication' window didn't open,"+($DeviceCodeRequest.message -split "To sign in, " | Select-Object -Last 1)
-        Write-Log -Message $msg -LogOnly
+        $qs = ($authParams.GetEnumerator() | ForEach-Object {
+            "{0}={1}" -f $_.Key, [System.Web.HttpUtility]::UrlEncode([string]$_.Value)
+        }) -join '&'
+        $authorizeUrl = "https://login.microsoftonline.com/$TenantID/oauth2/v2.0/authorize?$qs"
 
+        Write-Host "`nOpening your default browser to sign in to Microsoft Entra ID..." -ForegroundColor Yellow
+        Write-Host "If the browser does not open automatically, copy and paste this URL:`n$authorizeUrl`n" -ForegroundColor Gray
+        Write-Log -Message "Opening browser for Entra sign-in (redirect_uri=$redirectUri)." -LogOnly
 
-        # Open Authentication form window
-        Add-Type -AssemblyName System.Windows.Forms
-        $form = New-Object -TypeName System.Windows.Forms.Form -Property @{ Width = 440; Height = 640 }
-        $web = New-Object -TypeName System.Windows.Forms.WebBrowser -Property @{ Width = 440; Height = 600; Url = "https://www.microsoft.com/devicelogin" }
-        $web.Add_DocumentCompleted($DocComp)
-        $web.DocumentText
-        $form.Controls.Add($web)
-        $form.Add_Shown({ $form.Activate() })
-        $web.ScriptErrorsSuppressed = $true
-        $form.AutoScaleMode = 'Dpi'
-        $form.text = "Microsoft Graph Authentication"
-        $form.ShowIcon = $False
-        $form.AutoSizeMode = 'GrowAndShrink'
-        $Form.StartPosition = 'CenterScreen'
-        $form.ShowDialog() | Out-Null
-        
+        # Launch the user's default browser
+        try { Start-Process $authorizeUrl | Out-Null } catch { }
+
+        # --- Wait for the AAD redirect, bounded by $Timeout ---
+        $contextTask = $listener.GetContextAsync()
+        if (-not $contextTask.Wait([int]($Timeout * 1000))) {
+            throw 'Login timed out, please try again.'
+        }
+        $context  = $contextTask.Result
+        $request  = $context.Request
+        $response = $context.Response
+
+        $returnedState = $request.QueryString['state']
+        $code          = $request.QueryString['code']
+        $oauthError    = $request.QueryString['error']
+        $errorDesc     = $request.QueryString['error_description']
+
+        # Respond to the browser so the user knows they can close the tab
+        if ($code -and $returnedState -eq $state) {
+            $html = @"
+<!doctype html><html><head><meta charset="utf-8"><title>Sign-in complete</title></head>
+<body style="font-family:Segoe UI,Arial,sans-serif;padding:2em;color:#333">
+<h2 style="color:#107c10">Sign-in complete</h2>
+<p>You can close this tab and return to the GSATool window.</p>
+</body></html>
+"@
+        } else {
+            $safeMsg = [System.Web.HttpUtility]::HtmlEncode("$oauthError $errorDesc".Trim())
+            $html = @"
+<!doctype html><html><head><meta charset="utf-8"><title>Sign-in failed</title></head>
+<body style="font-family:Segoe UI,Arial,sans-serif;padding:2em;color:#333">
+<h2 style="color:#a80000">Sign-in failed</h2>
+<p>$safeMsg</p>
+</body></html>
+"@
+        }
+        $buffer = [System.Text.Encoding]::UTF8.GetBytes($html)
+        $response.ContentType    = 'text/html; charset=utf-8'
+        $response.ContentLength64 = $buffer.Length
+        $response.OutputStream.Write($buffer, 0, $buffer.Length)
+        $response.OutputStream.Close()
+
+        if ($oauthError) {
+            throw "Authorization failed: $oauthError - $errorDesc"
+        }
+        if (-not $code) {
+            throw 'Authorization response did not include a code.'
+        }
+        if ($returnedState -ne $state) {
+            throw 'State mismatch in authorization response (possible CSRF).'
+        }
+
+        # --- Exchange the authorization code for tokens (PKCE, no client secret) ---
         $TokenRequestParams = @{
-            Method = 'POST'
-            Uri    = "https://login.microsoftonline.com/$tenantId/oauth2/v2.0/token"
-            ContentType = "application/x-www-form-urlencoded"
-            Body   = @{
-                grant_type = "urn:ietf:params:oauth:grant-type:device_code"
-                code       = $DeviceCodeRequest.device_code
-                client_id  = $ClientId
+            Method      = 'POST'
+            Uri         = "https://login.microsoftonline.com/$TenantID/oauth2/v2.0/token"
+            ContentType = 'application/x-www-form-urlencoded'
+            Body        = @{
+                client_id     = $ClientID
+                grant_type    = 'authorization_code'
+                code          = $code
+                redirect_uri  = $redirectUri
+                code_verifier = $codeVerifier
+                scope         = "$Scope offline_access openid profile"
             }
         }
-        $TimeoutTimer = [System.Diagnostics.Stopwatch]::StartNew()
-        while ([string]::IsNullOrEmpty($TokenRequest.access_token)) {
-            if ($TimeoutTimer.Elapsed.TotalSeconds -gt $Timeout) {
-                throw 'Login timed out, please try again.'
-            }
-            $TokenRequest = try {
-                Invoke-RestMethod @TokenRequestParams -ErrorAction Stop
-            }
-            catch {
-                $Message = $_.ErrorDetails.Message | ConvertFrom-Json
-                if ($Message.error -ne "authorization_pending") {
-                    throw
-                }
-            }
-            Start-Sleep -Seconds 1
-        }
+        $TokenRequest = Invoke-RestMethod @TokenRequestParams
+
+        # Stash refresh token for optional silent renewal by callers
+        $global:refreshtoken = $TokenRequest.refresh_token
+
         Write-Output $TokenRequest.access_token
     }
     finally {
-        try {
-            Remove-Item -Path $TempPage.FullName -Force -ErrorAction Stop
-            $TimeoutTimer.Stop()
-        }
-        catch {
-            #Ignore errors here
-        }
+        try { $listener.Stop()  } catch {}
+        try { $listener.Close() } catch {}
     }
 }
 
